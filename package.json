@@ -1,0 +1,26 @@
+{
+  "name": "azlib",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/metalsm7/azlib-js.git"
+  },
+  "author": "Lee yonghun <metalsm7@gmail.com> (https://github.com/metalsm7)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/metalsm7/azlib-js/issues",
+    "email": "metalsm7@gmail.com"
+  },
+  "homepage": "https://github.com/metalsm7/azlib-js#readme",
+  "dependencies": {
+    "mysql2": "^2.3.3"
+  },
+  "devDependencies": {
+    "typescript": "^4.4.4"
+  }
+}

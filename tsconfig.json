@@ -1,0 +1,22 @@
+{
+    "compilerOptions": {
+        "target": "ES2017",
+        "module": "commonjs",
+        "strict": true,
+        "declaration": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "forceConsistentCasingInFileNames": true,
+        "baseUrl": "./",
+        "outDir": "./",
+        // "moduleResolution": "node",
+        // "types": ["node"]
+    },
+    "include": ["src/**/*"],
+    // "files": [
+    //     "src/index.ts"
+    // ],
+    "exclude": ["node_modules", "**/*.spec.ts"],
+    "$schema": "https://json.schemastore.org/tsconfig",
+    "display": "Recommended"
+  }
