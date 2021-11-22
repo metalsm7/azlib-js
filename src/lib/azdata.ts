@@ -4,32 +4,34 @@ import { AZList } from './azlist';
 
 export class AZData {
     private _map_async: AZMap;
-    private _map_attribute: AZMap;
+    // private _map_attribute: AZMap;
+    private _attribute: AZData.AttributeData;
     private _indexer: Array<AZData.KeyLink>;
 
     constructor() {
         this._map_async = new AZMap();
-        this._map_attribute = new AZMap();
+        // this._map_attribute = new AZMap();
+        this._attribute = new AZData.AttributeData();
         this._indexer = new Array<AZData.KeyLink>();
     }
 
-    getAttribute(key: string): any {
-        return this._map_attribute.get(key);
-    }
+    // getAttribute(key: string): any {
+    //     return this._map_attribute.get(key);
+    // }
 
-    putAttribute(key: string, value: any): any {
-        return this._map_attribute.put(key, value);
-    }
+    // putAttribute(key: string, value: any): any {
+    //     return this._map_attribute.put(key, value);
+    // }
 
-    removeAttribute(key: string): any {
-        return this._map_attribute.remove(key);
-    }
+    // removeAttribute(key: string): any {
+    //     return this._map_attribute.remove(key);
+    // }
 
-    clearAttribute(): number {
-        const rtn_val = this._map_attribute.size();
-        this._map_attribute.clear();
-        return rtn_val;
-    }
+    // clearAttribute(): number {
+    //     const rtn_val = this._map_attribute.size();
+    //     this._map_attribute.clear();
+    //     return rtn_val;
+    // }
 
     private existsLinkKey(link_key: string): boolean {
         let rtn_val = false;
@@ -57,26 +59,48 @@ export class AZData {
         return rtn_val;
     }
 
-    add(key: string, value: any, _cb: Function|null = null): AZData {
-        let link_key: string = key;
-        if (this._map_async.exists(key)) {
-            link_key = `${key}/${String.random()}`;
-            while (this.existsLinkKey(link_key)) {
-                link_key = `${key}/${String.random()}`;
+
+    add(key: string|AZData, value: any = null, _cb: Function|null = null): AZData {
+        if (key instanceof AZData) {
+            let key_links: Array<string>|null = null;
+            _cb && (key_links = new Array<string>());
+            for (let cnti: number = 0; cnti < key.size(); cnti++) {
+                const _key: string = key.getKey(cnti);
+                const _val: any = key.get(cnti);
+                //
+                this.add(_key, _val, (link: string): void => {
+                    key_links && key_links.push(link);
+                });
             }
+            _cb && _cb(key_links);
         }
-        const key_link = new AZData.KeyLink(key, link_key);
-        this._map_async.put(link_key, value);
-        this._indexer.push(key_link);
-        _cb && _cb(key_link);
+        else {
+            let link_key: string = key;
+            if (this._map_async.exists(key)) {
+                link_key = `${key}/${String.random()}`;
+                while (this.existsLinkKey(link_key)) {
+                    link_key = `${key}/${String.random()}`;
+                }
+            }
+            const key_link = new AZData.KeyLink(key, link_key);
+            this._map_async.put(link_key, value);
+            this._indexer.push(key_link);
+            _cb && _cb(key_link);
+        }
         return this;
     }
 
-    set(key: string, value: any): AZData {
-        if (!this._map_async.exists(key)) {
-            return this.add(key, value);
+    set(key: string|number, value: any): AZData {
+        if (typeof key === 'string') {
+            if (!this._map_async.exists(key)) {
+                return this.add(key, value);
+            }
+            this._map_async.put(key, value);
         }
-        this._map_async.put(key, value);
+        else {
+            if (key < 0 || key > this._indexer.length -1) throw new Error('index out of bounds');
+            this._map_async.put(this._indexer[key].getLink(), value);
+        }
         return this;
     }
 
@@ -168,6 +192,10 @@ export class AZData {
     toJsonString(): string {
         return this.toString(true);
     }
+
+    get attribute(): AZData.AttributeData {
+        return this._attribute;
+    }
 }
 
 export namespace AZData {
@@ -190,6 +218,60 @@ export namespace AZData {
 
         toString(): string {
             return `${this._key}:${this._link}`;
+        }
+    }
+
+    class KeyValue {
+        private _key: string;
+        private _value: any;
+
+        constructor(key: string, value: any) {
+            this._key = key;
+            this._value = value;
+        }
+
+        getKey(): string {
+            return this._key;
+        }
+
+        getValue(): any {
+            return this._value;
+        }
+
+        toString(): string {
+            return `${this._key}:${this._value}`;
+        }
+    }
+
+    export class AttributeData {
+        private _list: Array<KeyValue>;
+
+        constructor() {
+            this._list = new Array<KeyValue>();
+        }
+
+        add(key: string, value: any): any {
+            this._list.push(new KeyValue(key, value));
+            return value;
+        }
+
+        get(key: string|number): any {
+            let rtn_val: any = null;
+            if (typeof key === 'string') {
+                for (let cnti: number = 0; cnti < this._list.length; cnti++) {
+                    const data: KeyValue = this._list[cnti];
+                    if (data.getKey() === key) {
+                        rtn_val = data.getValue();
+                        break;
+                    }
+                }
+            }
+            else {
+                if (key > -1 && key < this._list.length) {
+                    rtn_val = this._list[key].getValue();
+                }
+            }
+            return rtn_val;
         }
     }
 }

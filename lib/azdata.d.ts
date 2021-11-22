@@ -1,17 +1,13 @@
 import './prototypes';
 export declare class AZData {
     private _map_async;
-    private _map_attribute;
+    private _attribute;
     private _indexer;
     constructor();
-    getAttribute(key: string): any;
-    putAttribute(key: string, value: any): any;
-    removeAttribute(key: string): any;
-    clearAttribute(): number;
     private existsLinkKey;
     indexOf(key: string): number;
-    add(key: string, value: any, _cb?: Function | null): AZData;
-    set(key: string, value: any): AZData;
+    add(key: string | AZData, value?: any, _cb?: Function | null): AZData;
+    set(key: string | number, value: any): AZData;
     remove(key: string | number, _cb?: Function | null): AZData;
     clear(): AZData;
     get(key_or_index: string | number | AZData.KeyLink): any;
@@ -22,6 +18,7 @@ export declare class AZData {
     size(): number;
     toString(_json?: boolean): string;
     toJsonString(): string;
+    get attribute(): AZData.AttributeData;
 }
 export declare namespace AZData {
     class KeyLink {
@@ -31,5 +28,11 @@ export declare namespace AZData {
         getKey(): string;
         getLink(): string;
         toString(): string;
+    }
+    class AttributeData {
+        private _list;
+        constructor();
+        add(key: string, value: any): any;
+        get(key: string | number): any;
     }
 }

@@ -1,4 +1,5 @@
 import { AZMap } from './lib/azmap';
 import { AZData } from './lib/azdata';
 import { AZList } from './lib/azlist';
-export { AZMap, AZData, AZList };
+import { AZSql } from './lib/azsql';
+export { AZMap, AZData, AZList, AZSql };

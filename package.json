@@ -18,9 +18,12 @@
   },
   "homepage": "https://github.com/metalsm7/azlib-js#readme",
   "dependencies": {
-    "mysql2": "^2.3.3"
+    "mysql2": "^2.3.3",
+    "sqlite3": "^5.0.2"
   },
   "devDependencies": {
+    "@types/mysql2": "github:types/mysql2",
+    "ts-node": "^10.4.0",
     "typescript": "^4.4.4"
   }
 }
