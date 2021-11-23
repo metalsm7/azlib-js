@@ -1,6 +1,7 @@
 import './prototypes';
 import { AZMap } from './azmap';
 import { AZList } from './azlist';
+import { StringBuilder } from './stringbuilder';
 
 export class AZData {
     private _map_async: AZMap;
@@ -45,6 +46,10 @@ export class AZData {
         //         rtn_val = link_key === el.getLink();
         //     }))
         return rtn_val;
+    }
+
+    hasKey(key: string): boolean {
+        return this.indexOf(key) > -1;
     }
 
     indexOf(key: string): number {
@@ -151,6 +156,7 @@ export class AZData {
     }
 
     getKey(index: number): string {
+        // console.log(`azdata - getKey - index:${index} / length:${this._indexer.length} / indexer:${JSON.stringify(this._indexer)}`);
         return this._indexer[index].getKey();
     }
 
@@ -160,6 +166,14 @@ export class AZData {
 
     size(): number {
         return this._indexer.length;
+    }
+
+    getKeys(): Array<string> {
+        const rtn_val: Array<string> = new Array<string>();
+        for (let cnti: number = 0; cnti < this._indexer.length; cnti++) {
+            rtn_val.push(this._indexer[cnti].getKey());
+        }
+        return rtn_val;
     }
 
     toString(_json: boolean = false): string {
@@ -272,6 +286,16 @@ export namespace AZData {
                 }
             }
             return rtn_val;
+        }
+
+        toString(): string {
+            const rtn_val: StringBuilder = new StringBuilder();
+            for (let cnti: number = 0; cnti < this._list.length; cnti++) {
+                const data: KeyValue = this._list[cnti];
+                rtn_val.append(data.toString());
+                cnti < this._list.length - 1 && rtn_val.append(',');
+            }
+            return rtn_val.toString();
         }
     }
 }
