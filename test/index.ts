@@ -58,30 +58,71 @@ const test: Function = async () => {
 
     // process.exit(1);
 
+    // let qres: AZSql.Result = await sql
+    //     .setPrepared(true)
+    //     .executeAsync('SELECT * FROM corp_fee WHERE keyFee IN (@keyFee)', new AZData().add('@keyFee', [1, '2']));
+    // console.log('qres:');
+    // console.log(qres);
+
     const bSql: AZSql.Basic = new AZSql.Basic('corp_fee', sql);
     bSql
         .setIsPrepared(true)
         .set('keyCorp', 1)
         .set('fee', .2)
-        .where('keyFee', 21);
+        .where('keyCorp', 1, AZSql.BQuery.WHERETYPE.BETWEEN)
+        .where('keyFee', 21, AZSql.BQuery.WHERETYPE.IN);
     let query: string = bSql.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.INSERT);
-    console.log(`query:${query}`);
+    let param: AZData = bSql.getPreparedParameters();
+    let res: AZSql.Result = await bSql.doInsert();
+    console.log(`---------------`);
+    console.log(`query`);
+    console.log(query);
+    console.log(`---------------`);
+    console.log(`param`);
+    console.log(param.toJsonString());
+    console.log(`---------------`);
+    console.log(`res`);
+    console.log(res);
+
+    const id: number = res.identity as number;
     
     bSql
         .clear()
         .setIsPrepared(true)
         .set('fee', .07)
-        .where('keyFee', 21);
+        // .where('keyCorp', 1, AZSql.BQuery.WHERETYPE.BETWEEN)
+        .where('keyFee', id, AZSql.BQuery.WHERETYPE.IN);
     query = bSql.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.UPDATE);
-    console.log(`query:${query}`);
+    param = bSql.getPreparedParameters();
+    res = await bSql.doUpdate();
+    console.log(`---------------`);
+    console.log(`query`);
+    console.log(query);
+    console.log(`---------------`);
+    console.log(`param`);
+    console.log(param.toJsonString());
+    console.log(`---------------`);
+    console.log(`res`);
+    console.log(res);
     
     bSql
         .clear()
         .setIsPrepared(true)
         .where('fee', .07)
-        .where('keyFee', 21);
+        // .where('keyCorp', 1, AZSql.BQuery.WHERETYPE.BETWEEN)
+        .where('keyFee', id, AZSql.BQuery.WHERETYPE.IN);
     query = bSql.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.DELETE);
-    console.log(`query:${query}`);
+    param = bSql.getPreparedParameters();
+    res = await bSql.doDelete();
+    console.log(`---------------`);
+    console.log(`query`);
+    console.log(query);
+    console.log(`---------------`);
+    console.log(`param`);
+    console.log(param.toJsonString());
+    console.log(`---------------`);
+    console.log(`res`);
+    console.log(res);
 };
 
 test();

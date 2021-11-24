@@ -29,10 +29,13 @@ export class AZSql {
     protected _is_prepared: boolean = false;
 
     constructor(connection_or_option: AZSql.Option|mysql.Connection) {
-        console.log(connection_or_option);
-        console.log(typeof connection_or_option);
+        // console.log(connection_or_option);
+        // console.log(typeof connection_or_option);
         if ((connection_or_option as AZSql.Option)['sql_type'] !== undefined) {
             this._option = connection_or_option as AZSql.Option;
+        }
+        else {
+            this._sql_connection = connection_or_option as mysql.Connection;
         }
     }
 
@@ -83,8 +86,19 @@ export class AZSql {
             const key: string|null = match_array && match_array.length > 2 ? match_array[2] : null;
             // console.log(`getPreparedQueryAndParams - key:${key}`);
             if (key == null) continue;
-            query = query.replace(regex, '$1?$3');
-            param.push(this._parameters?.get(key));
+            const val: any = this._parameters?.get(key);
+            if (typeof val !== 'undefined' && Array.isArray(val)) {
+                let q_str: string = ',?'.repeat((val as Array<any>).length);
+                q_str.length > 1 && (q_str = q_str.substring(1));
+                query = query.replace(regex, `$1${q_str}$3`);
+                for (let cnti: number = 0; cnti < (val as Array<any>).length; cnti++) {
+                    param.push((val as Array<any>)[cnti]);
+                }
+            }
+            else {
+                query = query.replace(regex, '$1?$3');
+                param.push(this._parameters?.get(key));
+            }
         }
         // for (let cnti: number = 0; cnti < this._parameters?.size(); cnti++) {
         //     const key: string = this._parameters.getKey(cnti);
@@ -298,6 +312,8 @@ export class AZSql {
             }
         }
 
+        if (!this.connected) await this.openAsync();
+
         const is_prepared: boolean = this.isPrepared || this.getParamters() !== null && ((this.getParamters() as AZData).size() > 0);
 
         let rtn_val: AZSql.Result = {header: null, err: null} as AZSql.Result;
@@ -354,38 +370,38 @@ export class AZSql {
         return rtn_val;
     }
 
-    async get(
-        query_or_id?: string|boolean, 
-        param_or_id?: AZData|boolean,
-        return_param_or_id?: AZData|boolean,
-        is_sp?: boolean
-    ): Promise<AZSql.Result> {
-        typeof is_sp !== 'undefined' && this.setIsStoredProcedure(is_sp);
-        if (typeof return_param_or_id !== 'undefined') {
-            if (return_param_or_id instanceof AZData) {
-                this.setRetuenParameters(return_param_or_id as AZData);
-            }
-            else {
-                // this.setIdentity(return_param_or_id as boolean);
-            }
-        }
-        if (typeof param_or_id !== 'undefined') {
-            if (param_or_id instanceof AZData) {
-                this.setParameters(param_or_id as AZData);
-            }
-            else {
-                // this.setIdentity(param_or_id as boolean);
-            }
-        }
-        if (typeof query_or_id !== 'undefined') {
-            if (typeof query_or_id === 'string') {
-                this.setQuery(query_or_id as string);
-            }
-            else {
-                // this.setIdentity(query_or_id as boolean);
-            }
-        }
-    }
+    // async get(
+    //     query_or_id?: string|boolean, 
+    //     param_or_id?: AZData|boolean,
+    //     return_param_or_id?: AZData|boolean,
+    //     is_sp?: boolean
+    // ): Promise<AZSql.Result> {
+    //     typeof is_sp !== 'undefined' && this.setIsStoredProcedure(is_sp);
+    //     if (typeof return_param_or_id !== 'undefined') {
+    //         if (return_param_or_id instanceof AZData) {
+    //             this.setRetuenParameters(return_param_or_id as AZData);
+    //         }
+    //         else {
+    //             // this.setIdentity(return_param_or_id as boolean);
+    //         }
+    //     }
+    //     if (typeof param_or_id !== 'undefined') {
+    //         if (param_or_id instanceof AZData) {
+    //             this.setParameters(param_or_id as AZData);
+    //         }
+    //         else {
+    //             // this.setIdentity(param_or_id as boolean);
+    //         }
+    //     }
+    //     if (typeof query_or_id !== 'undefined') {
+    //         if (typeof query_or_id === 'string') {
+    //             this.setQuery(query_or_id as string);
+    //         }
+    //         else {
+    //             // this.setIdentity(query_or_id as boolean);
+    //         }
+    //     }
+    // }
 
     get connected(): boolean {
         return this._connected;
@@ -412,9 +428,11 @@ export namespace AZSql {
     }
 
     export interface Result {
-        affected: number,
-        identity: number,
+        affected?: number,
+        identity?: number,
         header?: any,
+        rows?: Array<any>,
+        fileds?: Array<any>,
         err: Error|null,
     }
     
@@ -539,16 +557,24 @@ export namespace AZSql {
                                 rtn_val.append(`${data.get(0)}`);
                             }
                             else {
+                                const val: any = data.get(0);
                                 if (this.isPrepared()) {
                                     rtn_val.append(`@${data.getKey(0).replace(/\./, '___')}_set_${cnti + 1}`);
+                                    // if (val && Array.isArray(val)) {
+                                    //     for (let cntk: number = 0; cntk < (val as Array<any>).length; cntk++) {
+                                    //         rtn_val.append(`@${data.getKey(0).replace(/\./, '___')}_set_${cnti + 1}_${cntk + 1}`);
+                                    //     }
+                                    // }
+                                    // else {
+                                    //     rtn_val.append(`@${data.getKey(0).replace(/\./, '___')}_set_${cnti + 1}`);
+                                    // }
                                 }
                                 else {
-                                    const val: any = data.get(0);
                                     if (['number', 'boolean'].indexOf(typeof val) > -1) {
-                                        rtn_val.append(`${data.get(0)}`);
+                                        rtn_val.append(`${val}`);
                                     }
                                     else {
-                                        rtn_val.append(`'${data.get(0)}'`);
+                                        rtn_val.append(`'${val}'`);
                                     }
                                 }
                             }
@@ -814,7 +840,7 @@ export namespace AZSql {
                                 }
                                 else {
                                     rtn_val.add(`@${this._column?.replace(/\./, '___')}_where_${index}_between_1`, this._value);
-                                    rtn_val.add(`@${this._column?.replace(/\./, '___')}_where_${index}_between_2`, this._value);
+                                    // rtn_val.add(`@${this._column?.replace(/\./, '___')}_where_${index}_between_2`, this._value);
                                 }
                                 break;
                             case BQuery.WHERETYPE.IN:
@@ -1108,7 +1134,7 @@ export namespace AZSql {
         }
 
         async doUpdate(_require_where: boolean = true): Promise<AZSql.Result> {
-            if (_require_where && this._sql_set.size() < 1) {
+            if (_require_where && this._sql_where.length < 1) {
                 return {header: null, err: new Error('where clause required')} as AZSql.Result;
             }
             if (typeof this._azsql === 'undefined') {
@@ -1118,7 +1144,7 @@ export namespace AZSql {
         }
 
         async doDelete(_require_where: boolean = true): Promise<AZSql.Result> {
-            if (_require_where && this._sql_set.size() < 1) {
+            if (_require_where && this._sql_where.length < 1) {
                 return {header: null, err: new Error('where clause required')} as AZSql.Result;
             }
             if (typeof this._azsql === 'undefined') {
