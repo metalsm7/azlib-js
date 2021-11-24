@@ -5,6 +5,7 @@ export declare class AZData {
     private _indexer;
     constructor();
     private existsLinkKey;
+    hasKey(key: string): boolean;
     indexOf(key: string): number;
     add(key: string | AZData, value?: any, _cb?: Function | null): AZData;
     set(key: string | number, value: any): AZData;
@@ -16,6 +17,7 @@ export declare class AZData {
     getKey(index: number): string;
     getLink(index: number): string;
     size(): number;
+    getKeys(): Array<string>;
     toString(_json?: boolean): string;
     toJsonString(): string;
     get attribute(): AZData.AttributeData;
@@ -34,5 +36,6 @@ export declare namespace AZData {
         constructor();
         add(key: string, value: any): any;
         get(key: string | number): any;
+        toString(): string;
     }
 }
