@@ -381,8 +381,8 @@ export class AZSql {
 
     async getAsync(
         query_or_id?: string|boolean, 
-        param_or_id?: AZData|boolean,
-        return_param_or_id?: AZData|boolean,
+        param_or_id?: AZData|object|boolean,
+        return_param_or_id?: AZData|object|boolean,
         is_sp?: boolean
     ): Promise<any> {
         const res: object = await this.getDataAsync(query_or_id, param_or_id, return_param_or_id, is_sp);
