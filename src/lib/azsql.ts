@@ -411,7 +411,7 @@ export class AZSql {
         is_sp?: boolean
     ): Promise<Array<any>> {
         const res: AZSql.Result = await this.executeAsync(query_or_id, param_or_id, return_param_or_id, is_sp);
-        if (typeof res.err !== 'undefined') throw res.err;
+        if (typeof res.rows === 'undefined' && typeof res.err !== 'undefined') throw res.err;
         let rtn_val: Array<any> = new Array<any>();
         typeof res.rows !== 'undefined' && (rtn_val = res.rows);
         return rtn_val;

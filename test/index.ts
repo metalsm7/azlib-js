@@ -194,7 +194,10 @@ const test: Function = async () => {
     console.log(`stage.7`);
     qres = await sql.executeAsync(`SELECT * FROM test WHERE id in (@id)`, {'@id': [1, 3]}, false);
     console.log(qres);
-    console.log(`stage.8`);
+    console.log(`stage.8.1`);
+    let ares = await sql.getListAsync(`SELECT * FROM test WHERE id in (@id)`, {'@id': [1, 3]}, false);
+    console.log(ares);
+    console.log(`stage.8.2`);
 
     // console.log(`stage.8.1`);
     // let bSql: AZSql.Basic = new AZSql.Basic('test', sql);
