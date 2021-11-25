@@ -112,7 +112,16 @@ const test: Function = async () => {
         process.exit(9);
     }
 
-    // const bSql: AZSql.Basic = new AZSql.Basic('corp_fee', sql);
+    const bSql: AZSql.Basic = new AZSql.Basic('corp_fee', sql);
+    let res: Array<any> = await bSql
+        .setIsPrepared(true)
+        .where('keyCorp', [1,2,3], AZSql.BQuery.WHERETYPE.IN)
+        // .where('keyFee', 21, AZSql.BQuery.WHERETYPE.IN)
+        .doSelectAsync();
+    console.log(`---------------`);
+    console.log(`res`);
+    console.log(res);
+
     // bSql
     //     .setIsPrepared(true)
     //     .set('keyCorp', 1)

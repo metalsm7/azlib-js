@@ -743,12 +743,14 @@ export namespace AZSql {
         protected _prepared: boolean = false;
         protected _sql_set: AZList;
         protected _sql_where: Array<BQuery.Condition|BQuery.And|BQuery.Or>;
+        protected _sql_select: string|null;
 
         constructor(table_name?: string, prepared: boolean = false) {
             typeof table_name !== 'undefined' && (this._table_name = table_name);
             this._prepared = prepared;
             this._sql_set = new AZList();
             this._sql_where = new Array<BQuery.Condition|BQuery.And|BQuery.Or>();
+            this._sql_select = null;
         }
 
         isPrepared(): boolean {
@@ -763,6 +765,7 @@ export namespace AZSql {
         clear(): BQuery {
             // this._table_name = null;
             this._prepared = false;
+            this.clearSelect();
             this.clearSet();
             this.clearWhere();
             return this;
@@ -778,6 +781,11 @@ export namespace AZSql {
                 data.add(column, value);
                 this._sql_set.add(data);
             }
+            return this;
+        }
+
+        clearSelect(): BQuery {
+            this._sql_select = null;
             return this;
         }
 
@@ -808,6 +816,25 @@ export namespace AZSql {
             const rtn_val: StringBuilder = new StringBuilder();
             switch (query_type) {
                 case BQuery.CREATE_QUERY_TYPE.SELECT:
+                    rtn_val.append(`SELECT${EOL}`);
+                    rtn_val.append(` ${this._sql_select}${EOL}`);
+                    rtn_val.append(`FROM ${this._table_name}${EOL}`);
+                    this._sql_where.length > 0 && rtn_val.append(`WHERE${EOL}`);
+                    for (let cnti: number = 0; cnti < this._sql_where.length; cnti++) {
+                        const data: any = this._sql_where[cnti];
+                        rtn_val.append(` `);
+                        cnti > 0 && rtn_val.append(`AND `);
+                        if (data instanceof BQuery.And) {
+                            rtn_val.append((data as BQuery.And).setPrepared(this.isPrepared()).toString(index, (_idx: number): void => { index = _idx; }));
+                        }
+                        else if (data instanceof BQuery.Or) {
+                            rtn_val.append((data as BQuery.Or).setPrepared(this.isPrepared()).toString(index, (_idx: number): void => { index = _idx; }));
+                        }
+                        else if (data instanceof BQuery.Condition) {
+                            rtn_val.append((data as BQuery.Condition).setPrepared(this.isPrepared()).toString(index, (_idx: number): void => { index = _idx; }));
+                        }
+                        rtn_val.append(`${EOL}`);
+                    }
                     break;
                 case BQuery.CREATE_QUERY_TYPE.INSERT:
                     rtn_val.append(`INSERT INTO ${this._table_name} (${EOL}`);
@@ -1426,14 +1453,25 @@ export namespace AZSql {
             return this;
         }
 
-        async doInsert(): Promise<AZSql.Result> {
+        async doSelectAsync(select: string = '*'): Promise<Array<any>> {
+            if (typeof this._azsql === 'undefined') throw new Error('AZSql is not defined');
+            this._sql_select = select;
+            // return await (this._azsql as AZSql).executeAsync(this.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.SELECT), this.getPreparedParameters());
+            const res: AZSql.Result = await (this._azsql as AZSql).executeAsync(this.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.SELECT), this.getPreparedParameters());
+            if (typeof res.rows === 'undefined' && typeof res.err !== 'undefined') throw res.err;
+            let rtn_val: Array<any> = new Array<any>();
+            typeof res.rows !== 'undefined' && (rtn_val = res.rows);
+            return rtn_val;
+        }
+
+        async doInsertAsync(): Promise<AZSql.Result> {
             if (typeof this._azsql === 'undefined') {
                 return {header: null, err: new Error('AZSql is not defined')} as AZSql.Result;
             }
             return await (this._azsql as AZSql).executeAsync(this.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.INSERT), this.getPreparedParameters());
         }
 
-        async doUpdate(_require_where: boolean = true): Promise<AZSql.Result> {
+        async doUpdateAsync(_require_where: boolean = true): Promise<AZSql.Result> {
             if (_require_where && this._sql_where.length < 1) {
                 return {header: null, err: new Error('where clause required')} as AZSql.Result;
             }
@@ -1443,7 +1481,7 @@ export namespace AZSql {
             return await (this._azsql as AZSql).executeAsync(this.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.UPDATE), this.getPreparedParameters());
         }
 
-        async doDelete(_require_where: boolean = true): Promise<AZSql.Result> {
+        async doDeleteAsync(_require_where: boolean = true): Promise<AZSql.Result> {
             if (_require_where && this._sql_where.length < 1) {
                 return {header: null, err: new Error('where clause required')} as AZSql.Result;
             }

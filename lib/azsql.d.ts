@@ -110,11 +110,13 @@ export declare namespace AZSql {
         protected _prepared: boolean;
         protected _sql_set: AZList;
         protected _sql_where: Array<BQuery.Condition | BQuery.And | BQuery.Or>;
+        protected _sql_select: string | null;
         constructor(table_name?: string, prepared?: boolean);
         isPrepared(): boolean;
         setIsPrepared(prepared: boolean): BQuery;
         clear(): BQuery;
         set(column: string | AZSql.BQuery.SetData, value?: any, value_type?: BQuery.VALUETYPE): BQuery;
+        clearSelect(): BQuery;
         clearSet(): BQuery;
         where(column_or_data: BQuery.Condition | BQuery.And | BQuery.Or | string, value?: any, where_type?: BQuery.WHERETYPE, value_type?: BQuery.VALUETYPE): BQuery;
         clearWhere(): BQuery;
@@ -217,8 +219,9 @@ export declare namespace AZSql {
         clearSet(): BQuery;
         where(column_or_data: BQuery.Condition | BQuery.And | BQuery.Or | string, value?: any, where_type?: BQuery.WHERETYPE, value_type?: BQuery.VALUETYPE): AZSql.Basic;
         clearWhere(): AZSql.Basic;
-        doInsert(): Promise<AZSql.Result>;
-        doUpdate(_require_where?: boolean): Promise<AZSql.Result>;
-        doDelete(_require_where?: boolean): Promise<AZSql.Result>;
+        doSelectAsync(select?: string): Promise<Array<any>>;
+        doInsertAsync(): Promise<AZSql.Result>;
+        doUpdateAsync(_require_where?: boolean): Promise<AZSql.Result>;
+        doDeleteAsync(_require_where?: boolean): Promise<AZSql.Result>;
     }
 }
