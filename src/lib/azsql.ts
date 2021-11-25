@@ -9,6 +9,7 @@ import { StringBuilder } from './stringbuilder';
 export class AZSql {
     protected _option: AZSql.Option = {} as AZSql.Option;
     protected _connected: boolean = false;
+    protected _open_self: boolean = false;
     
     protected _query: string|null = null;
     protected _parameters: AZData|null = null;
@@ -54,7 +55,7 @@ export class AZSql {
         // this.setIdentity(false);
         this.clearQuery();
         this.clearParameters();
-        this.clearRetuenParameters();
+        this.clearReturnParameters();
         this.removeTran();
         return this;
     }
@@ -132,7 +133,7 @@ export class AZSql {
         return [query, param];
     }
 
-    setParameters(parameters: AZData): AZSql {
+    setParameters(parameters: AZData|object): AZSql {
         if (this._parameters === null) {
             this._parameters = new AZData();
         }
@@ -140,7 +141,17 @@ export class AZSql {
             this._parameters.clear();
         }
         
-        this._parameters = parameters;
+        if (parameters instanceof AZData) {
+            this._parameters = parameters;
+        }
+        else {
+            const keys: Array<string> = Object.keys(parameters);
+            for (let cnti: number = 0; cnti < keys.length; cnti++) {
+                const key: string = keys[cnti];
+                const val: any = (parameters as any)[key];
+                this.addParameter(key, val);
+            }
+        }
         return this;
     }
 
@@ -173,7 +184,7 @@ export class AZSql {
     }
     
 
-    setRetuenParameters(parameters: AZData): AZSql {
+    setReturnParameters(parameters: AZData|object): AZSql {
         if (this._return_parameters === null) {
             this._return_parameters = new AZData();
         }
@@ -181,24 +192,34 @@ export class AZSql {
             this._return_parameters.clear();
         }
         
-        this._return_parameters = parameters;
+        if (parameters instanceof AZData) {
+            this._return_parameters = parameters;
+        }
+        else {
+            const keys: Array<string> = Object.keys(parameters);
+            for (let cnti: number = 0; cnti < keys.length; cnti++) {
+                const key: string = keys[cnti];
+                const val: any = (parameters as any)[key];
+                this.addReturnParameter(key, val);
+            }
+        }
         return this;
     }
 
-    getRetuenParamters(): AZData|null {
+    getReturnParamters(): AZData|null {
         return this._return_parameters;
     }
 
-    getRetuenParamter<Type>(key: string): Type {
+    getReturnParamter<Type>(key: string): Type {
         return this._return_parameters?.get(key) as Type;
     }
 
-    addRetuenParameter(key: string, value: any): AZSql {
+    addReturnParameter(key: string, value: any): AZSql {
         this._return_parameters?.add(key, value);
         return this;
     }
 
-    addRetuenParamters(paramters: AZData): AZSql {
+    addReturnParamters(paramters: AZData): AZSql {
         this._return_parameters?.add(paramters);
         return this;
     }
@@ -208,12 +229,12 @@ export class AZSql {
         return this;
     }
 
-    clearRetuenParameters(): AZSql {
+    clearReturnParameters(): AZSql {
         this._return_parameters?.clear();
         return this;
     }
 
-    removeRetuenParamters(): AZSql {
+    removeReturnParamters(): AZSql {
         this._return_parameters = null;
         return this;
     }
@@ -255,12 +276,38 @@ export class AZSql {
                 });
                 break;
         }
-        return this._connected = this._sql_connection !== null;
+        this._connected = this._open_self = this._sql_connection !== null;
+        // console.log(`openAsync - connected:${this.connected} / connection:${this._sql_connection} / sql_type:${this._option?.sql_type}`);
+        return this._connected;
+    }
+
+    async closeAsync(): Promise<void> {
+        // console.log(`closeAsync.BEGIN - sql_type:${this._option?.sql_type}`);
+        if (this.inTransaction || !this._open_self) return;
+        switch (this._option?.sql_type) {
+            case AZSql.SQL_TYPE.MYSQL:
+                await (this._sql_connection as mysql2.Connection).end();
+                break;
+            case AZSql.SQL_TYPE.SQLITE:
+                await new Promise((resolve: any, reject: any) => {
+                    (this._sql_connection as sqlite3.Database).close((_res) => {
+                        // console.log(`closeAsync.close - _res:${_res}`);
+                        if (_res === null) resolve();
+                        reject(_res);
+                    })
+                });
+                break;
+        }
+        this._sql_connection = null;
+        this._connected = false;
+        this._open_self = false;
+        // console.log(`closeAsync - connected:${this.connected} / connection:${this._sql_connection} / sql_type:${this._option?.sql_type}`);
     }
 
     async beginTran(_on_commit?: Function, _on_rollback?: Function): Promise<void> {
         if (this._in_transaction) throw new Error('Transaction in use');
         if (this._transaction !== null) throw new Error('Transaction exists');
+        !this._connected && await this.openAsync();
         switch (this.option?.sql_type) {
             case AZSql.SQL_TYPE.MYSQL:
                 if (typeof (this._sql_connection as any)['commit'] === 'undefined') {
@@ -282,28 +329,42 @@ export class AZSql {
     }
 
     async commit(): Promise<void> {
-        if (this._in_transaction) {
-            switch (this.option?.sql_type) {
-                case AZSql.SQL_TYPE.MYSQL:
-                    await (this._sql_connection as mysql2.Connection).commit();
-                    break;
+        try {
+            if (this._in_transaction) {
+                switch (this.option?.sql_type) {
+                    case AZSql.SQL_TYPE.MYSQL:
+                        await (this._sql_connection as mysql2.Connection).commit();
+                        break;
+                }
+                this._transaction_on_commit && this._transaction_on_commit();
             }
-            this._transaction_on_commit && this._transaction_on_commit();
         }
-        this.removeTran();
+        catch (e) {
+            throw e;
+        }
+        finally {
+            this.removeTran();
+            await this.closeAsync();
+        }
     }
 
     async rollback(): Promise<void> {
-        if (!this._in_transaction) throw new Error('Transaction not exists');
-        switch (this.option?.sql_type) {
-            case AZSql.SQL_TYPE.MYSQL:
-                await (this._sql_connection as mysql2.Connection).rollback();
-                break;
+        try {
+            if (!this._in_transaction) throw new Error('Transaction not exists');
+            switch (this.option?.sql_type) {
+                case AZSql.SQL_TYPE.MYSQL:
+                    await (this._sql_connection as mysql2.Connection).rollback();
+                    break;
+            }
+            this._transaction_on_rollback && this._transaction_on_rollback();
         }
-
-        this._transaction_on_rollback && this._transaction_on_rollback();
-
-        this.removeTran();
+        catch (e) {
+            throw e;
+        }
+        finally {
+            this.removeTran();
+            await this.closeAsync();
+        }
     }
 
     removeTran(): AZSql {
@@ -318,24 +379,64 @@ export class AZSql {
         return this;
     }
 
-    async executeAsync(
+    async getAsync(
         query_or_id?: string|boolean, 
         param_or_id?: AZData|boolean,
         return_param_or_id?: AZData|boolean,
         is_sp?: boolean
+    ): Promise<any> {
+        const res: object = await this.getDataAsync(query_or_id, param_or_id, return_param_or_id, is_sp);
+        let rtn_val: any = null;
+        const keys: Array<string> = Object.keys(res);
+        keys.length > 0 && (rtn_val = (res as any)[keys[0]]);
+        return rtn_val;
+    }
+
+    async getDataAsync(
+        query_or_id?: string|boolean,
+        param_or_id?: AZData|object|boolean,
+        return_param_or_id?: AZData|object|boolean,
+        is_sp?: boolean
+    ): Promise<object> {
+        const res: Array<any> = await this.getListAsync(query_or_id, param_or_id, return_param_or_id, is_sp);
+        let rtn_val: object = {};
+        res.length > 0 && (rtn_val = res[0]);
+        return rtn_val;
+    }
+
+    async getListAsync(
+        query_or_id?: string|boolean, 
+        param_or_id?: AZData|object|boolean,
+        return_param_or_id?: AZData|object|boolean,
+        is_sp?: boolean
+    ): Promise<Array<any>> {
+        const res: AZSql.Result = await this.executeAsync(query_or_id, param_or_id, return_param_or_id, is_sp);
+        if (typeof res.err !== 'undefined') throw res.err;
+        let rtn_val: Array<any> = new Array<any>();
+        typeof res.rows !== 'undefined' && (rtn_val = res.rows);
+        return rtn_val;
+    }
+
+    async executeAsync(
+        query_or_id?: string|boolean, 
+        param_or_id?: AZData|object|boolean,
+        return_param_or_id?: AZData|object|boolean,
+        is_sp?: boolean
     ): Promise<AZSql.Result> {
         typeof is_sp !== 'undefined' && this.setIsStoredProcedure(is_sp);
         if (typeof return_param_or_id !== 'undefined') {
-            if (return_param_or_id instanceof AZData) {
-                this.setRetuenParameters(return_param_or_id as AZData);
+            // console.debug(`type - return_param_or_id:${typeof return_param_or_id}`);
+            if (typeof return_param_or_id !== 'boolean') {
+                this.setReturnParameters(return_param_or_id as AZData|object);
             }
             else {
                 this.setIdentity(return_param_or_id as boolean);
             }
         }
         if (typeof param_or_id !== 'undefined') {
-            if (param_or_id instanceof AZData) {
-                this.setParameters(param_or_id as AZData);
+            // console.debug(`type - param_or_id:${typeof param_or_id}`);
+            if (typeof param_or_id !== 'boolean') {
+                this.setParameters(param_or_id as AZData|object);
             }
             else {
                 this.setIdentity(param_or_id as boolean);
@@ -350,178 +451,192 @@ export class AZSql {
             }
         }
 
+        let rtn_val: AZSql.Result = {} as AZSql.Result;
+
         if (!this.connected) await this.openAsync();
 
         const is_prepared: boolean = this.isPrepared || this.getParamters() !== null && ((this.getParamters() as AZData).size() > 0);
 
-        let rtn_val: AZSql.Result = {} as AZSql.Result;
         if (this.inTransaction && !this.connected) return Promise.reject(new Error('Not connected'));
         if (this.connected) {
-            switch (this.option?.sql_type) {
-                case AZSql.SQL_TYPE.MYSQL:
-                    if (is_prepared) {
-                        const [query, params] = this.getPreapredQueryAndParams();
-                        // console.log(`query:`);
-                        // console.log(query);
-                        // console.log(`params:`);
-                        // console.log(params);
-                        const [res, err] = await (this._sql_connection as mysql2.Connection).execute(query as string, params)
-                            .then((res: any) => {
-                                return [ res, null ];
-                            })
-                            .catch(async (err: Error) => {
-                                this.inTransaction && await this.rollback();
-                                return [ null, err ];
-                            });
-                        if (err) {
-                            rtn_val.err = err;
-                        }
-                        else {
-                            // console.log(`res:`);
-                            // if ((res as any)[1] !== null) throw (res as any)[1] as Error;
-                            // rtn_val = this.getIdentity() ?
-                            //     ((res as Array<any>)[0] as ResultSetHeader).insertId :
-                            //     ((res as Array<any>)[0] as ResultSetHeader).affectedRows;
-                            // console.log(`type:${(res as Array<any>)[0] instanceof Array}`);
-                            if (Array.isArray((res as Array<any>)[0])) {
-                                /**
-                                 * [
-                                 *  rows,
-                                 *  ColumnDefinitaion,
-                                 * ]
-                                 */
-                                rtn_val.rows = (res as Array<any>)[0] as Array<any>;
+            try {
+                switch (this.option?.sql_type) {
+                    case AZSql.SQL_TYPE.MYSQL:
+                        if (is_prepared) {
+                            const [query, params] = this.getPreapredQueryAndParams();
+                            // console.log(`query:`);
+                            // console.log(query);
+                            // console.log(`params:`);
+                            // console.log(params);
+                            const [res, err] = await (this._sql_connection as mysql2.Connection).execute(query as string, params)
+                                .then((res: any) => {
+                                    return [ res, null ];
+                                })
+                                .catch(async (err: Error) => {
+                                    this.inTransaction && await this.rollback();
+                                    return [ null, err ];
+                                });
+                            if (err) {
+                                rtn_val.err = err;
                             }
                             else {
-                                /**
-                                 * [
-                                    ResultSetHeader {
-                                        fieldCount: 0,
-                                        affectedRows: 1,
-                                        insertId: 4,
-                                        info: '',
-                                        serverStatus: 2,
-                                        warningStatus: 0
-                                    },
-                                    undefined
-                                    ]
-                                 */
-                                const header = ((res as Array<any>)[0] as mysql2.ResultSetHeader);
-                                rtn_val.affected = header.affectedRows;
-                                rtn_val.identity = header.insertId;
-                                rtn_val.header = header;
-                            }
-                        }
-                    }
-                    else {
-                        const [res, err] = await (this._sql_connection as mysql2.Connection).query(this._query as string)
-                            .then((res: any) => {
-                                return [ res, null ];
-                            })
-                            .catch(async (err: Error) => {
-                                this.inTransaction && await this.rollback();
-                                return [ null, err ];
-                            });
-                        if (err) {
-                            rtn_val.err = err;
-                        }
-                        else {
-                            if (Array.isArray((res as Array<any>)[0])) {
-                                rtn_val.rows = (res as Array<any>)[0] as Array<any>;
-                            }
-                            else {
-                                const header = ((res as Array<any>)[0] as mysql2.ResultSetHeader);
-                                rtn_val.affected = header.affectedRows;
-                                rtn_val.identity = header.insertId;
-                                rtn_val.header = header;
-                            }
-                        }
-                    }
-                    break;
-                case AZSql.SQL_TYPE.SQLITE:
-                    if (is_prepared) {
-                        const [query, params] = this.getPreapredQueryAndParams();
-                        const [res, err] = await new Promise((resolve: any, _reject: any) => {
-                            const stmt: sqlite3.Statement = (this._sql_connection as sqlite3.Database).prepare(query as string, (_res) => {
-                                if (_res === null) {
-                                    if (this.getIdentity()) {
-                                        stmt?.run(params, function (err: Error) {
-                                            if (err) {
-                                                resolve([null, err]);
-                                            }
-                                            else {
-                                                resolve([this as sqlite3.RunResult, null]);
-                                            }
-                                        });
-                                    }
-                                    else {
-                                        stmt?.all(params, function (err: Error, rows: Array<any>) {
-                                            if (err) {
-                                                resolve([null, err]);
-                                            }
-                                            else {
-                                                resolve([rows, null]);
-                                            }
-                                        });
-                                    }
+                                // console.log(`res:`);
+                                // if ((res as any)[1] !== null) throw (res as any)[1] as Error;
+                                // rtn_val = this.getIdentity() ?
+                                //     ((res as Array<any>)[0] as ResultSetHeader).insertId :
+                                //     ((res as Array<any>)[0] as ResultSetHeader).affectedRows;
+                                // console.log(`type:${(res as Array<any>)[0] instanceof Array}`);
+                                if (Array.isArray((res as Array<any>)[0])) {
+                                    /**
+                                     * [
+                                     *  rows,
+                                     *  ColumnDefinitaion,
+                                     * ]
+                                     */
+                                    rtn_val.rows = (res as Array<any>)[0] as Array<any>;
                                 }
                                 else {
-                                    resolve([null, _res]);
+                                    /**
+                                     * [
+                                        ResultSetHeader {
+                                            fieldCount: 0,
+                                            affectedRows: 1,
+                                            insertId: 4,
+                                            info: '',
+                                            serverStatus: 2,
+                                            warningStatus: 0
+                                        },
+                                        undefined
+                                        ]
+                                        */
+                                    const header = ((res as Array<any>)[0] as mysql2.ResultSetHeader);
+                                    rtn_val.affected = header.affectedRows;
+                                    rtn_val.identity = header.insertId;
+                                    rtn_val.header = header;
+                                }
+                            }
+                        }
+                        else {
+                            const [res, err] = await (this._sql_connection as mysql2.Connection).query(this._query as string)
+                                .then((res: any) => {
+                                    return [ res, null ];
+                                })
+                                .catch(async (err: Error) => {
+                                    this.inTransaction && await this.rollback();
+                                    return [ null, err ];
+                                });
+                            if (err) {
+                                rtn_val.err = err;
+                            }
+                            else {
+                                if (Array.isArray((res as Array<any>)[0])) {
+                                    rtn_val.rows = (res as Array<any>)[0] as Array<any>;
+                                }
+                                else {
+                                    const header = ((res as Array<any>)[0] as mysql2.ResultSetHeader);
+                                    rtn_val.affected = header.affectedRows;
+                                    rtn_val.identity = header.insertId;
+                                    rtn_val.header = header;
+                                }
+                            }
+                        }
+                        break;
+                    case AZSql.SQL_TYPE.SQLITE:
+                        if (is_prepared) {
+                            const [query, params] = this.getPreapredQueryAndParams();
+                            const [res, err] = await new Promise((resolve: any, _reject: any) => {
+                                const stmt: sqlite3.Statement = (this._sql_connection as sqlite3.Database).prepare(query as string, (_res) => {
+                                    if (_res === null) {
+                                        if (this.getIdentity()) {
+                                            stmt?.run(params, function (err: Error) {
+                                                if (err) {
+                                                    resolve([null, err]);
+                                                }
+                                                else {
+                                                    resolve([this as sqlite3.RunResult, null]);
+                                                }
+                                            });
+                                        }
+                                        else {
+                                            stmt?.all(params, function (err: Error, rows: Array<any>) {
+                                                if (err) {
+                                                    resolve([null, err]);
+                                                }
+                                                else {
+                                                    resolve([rows, null]);
+                                                }
+                                            });
+                                        }
+                                    }
+                                    else {
+                                        resolve([null, _res]);
+                                    }
+                                });
+                            });
+                            if (err) {
+                                rtn_val.err = err;
+                            }
+                            else {
+                                if (Array.isArray(res)) {
+                                    rtn_val.rows = res;
+                                }
+                                else {
+                                    rtn_val.affected = (res as sqlite3.RunResult).changes;
+                                    rtn_val.identity = (res as sqlite3.RunResult).lastID;
+                                }
+                            }
+                        }
+                        else {
+                            const [res, err] = await new Promise((resolve: any, _reject: any) => {
+                                if (this.getIdentity()) {
+                                    (this._sql_connection as sqlite3.Database).run(this._query as string, function (err: Error) {
+                                        if (err) {
+                                            resolve([null, err]);
+                                        }
+                                        else {
+                                            resolve([this as sqlite3.RunResult, null]);
+                                        }
+                                    });
+                                }
+                                else {
+                                    (this._sql_connection as sqlite3.Database).all(this._query as string, (err: Error, rows: Array<any>) => {
+                                        if (err) {
+                                            resolve([null, err]);
+                                        }
+                                        else {
+                                            resolve([rows, null]);
+                                        }
+                                    });
                                 }
                             });
-                        });
-                        if (err) {
-                            rtn_val.err = err;
-                        }
-                        else {
-                            if (Array.isArray(res)) {
-                                rtn_val.rows = res;
+                            if (err) {
+                                rtn_val.err = err;
                             }
                             else {
-                                rtn_val.affected = (res as sqlite3.RunResult).changes;
-                                rtn_val.identity = (res as sqlite3.RunResult).lastID;
+                                if (Array.isArray(res)) {
+                                    rtn_val.rows = res;
+                                }
+                                else {
+                                    rtn_val.affected = (res as sqlite3.RunResult).changes;
+                                    rtn_val.identity = (res as sqlite3.RunResult).lastID;
+                                }
                             }
                         }
-                    }
-                    else {
-                        const [res, err] = await new Promise((resolve: any, _reject: any) => {
-                            if (this.getIdentity()) {
-                                (this._sql_connection as sqlite3.Database).run(this._query as string, function (err: Error) {
-                                    if (err) {
-                                        resolve([null, err]);
-                                    }
-                                    else {
-                                        resolve([this as sqlite3.RunResult, null]);
-                                    }
-                                });
-                            }
-                            else {
-                                (this._sql_connection as sqlite3.Database).all(this._query as string, (err: Error, rows: Array<any>) => {
-                                    if (err) {
-                                        resolve([null, err]);
-                                    }
-                                    else {
-                                        resolve([rows, null]);
-                                    }
-                                });
-                            }
-                        });
-                        if (err) {
-                            rtn_val.err = err;
-                        }
-                        else {
-                            if (Array.isArray(res)) {
-                                rtn_val.rows = res;
-                            }
-                            else {
-                                rtn_val.affected = (res as sqlite3.RunResult).changes;
-                                rtn_val.identity = (res as sqlite3.RunResult).lastID;
-                            }
-                        }
-                    }
-                    break;
+                        break;
+                }
+            }
+            catch (e: any) {
+                rtn_val.err = e;
+            }
+            finally {
+                await this.closeAsync()
+                    .catch((_err) => {
+                        // console.log(`finally - err:${_err}`);
+                        rtn_val.err = _err;
+                    });
             }
         }
+        // console.log(`return`);
         return rtn_val;
     }
 
@@ -534,7 +649,7 @@ export class AZSql {
     //     typeof is_sp !== 'undefined' && this.setIsStoredProcedure(is_sp);
     //     if (typeof return_param_or_id !== 'undefined') {
     //         if (return_param_or_id instanceof AZData) {
-    //             this.setRetuenParameters(return_param_or_id as AZData);
+    //             this.setReturnParameters(return_param_or_id as AZData);
     //         }
     //         else {
     //             // this.setIdentity(return_param_or_id as boolean);

@@ -4,7 +4,6 @@ import * as mysql from 'mysql2/promise';
 import * as sqlite3 from 'sqlite3';
 
 const test: Function = async () => {
-    
     const pool = mysql.createPool({
         host: '127.0.0.1',
         user: 'scm',
@@ -23,14 +22,15 @@ const test: Function = async () => {
     });
 
     console.log(`stage.1`);
-    // let sql: AZSql.Prepared = new AZSql.Prepared({
-    //     sql_type: AZSql.SQL_TYPE.MYSQL,
-    //     server: '127.0.0.1',
-    //     id: 'scm',
-    //     pw: 'Dada!Scm88',
-    //     catalog: 'scm'
-    // } as AZSql.Option);
-    let sql: AZSql.Prepared = new AZSql.Prepared(pool);
+    let sql: AZSql.Prepared = new AZSql.Prepared({
+        sql_type: AZSql.SQL_TYPE.MYSQL,
+        server: '127.0.0.1',
+        id: 'scm',
+        pw: 'Dada!Scm88',
+        catalog: 'scm'
+    } as AZSql.Option);
+    // let sql: AZSql.Prepared = new AZSql.Prepared(pool);
+    
     // console.log(`stage.2`);
     // sql.setParameters(new AZData().add('k1', 'v1').add('k2', 22));
     // console.log(`k1:${sql.getParamter<number>('k1')}`);
@@ -83,6 +83,7 @@ const test: Function = async () => {
     console.log('qres----------------------------------');
     console.log(qres);
     await sql.commit();
+    console.log(`sql.commit`);
     // console.log(`affected:${qres.affected}`);
 
     // process.exit(1);
@@ -92,6 +93,24 @@ const test: Function = async () => {
         .executeAsync('SELECT * FROM corp_fee WHERE keyFee IN (@keyFee)', new AZData().add('@keyFee', [1, '2']));
     console.log('qres----------------------------------');
     console.log(qres);
+
+    try {
+        const list: Array<any> = await sql.getListAsync('SELECT * FROM corp_fee WHERE keyFee IN (@keyFee)', new AZData().add('@keyFee', [1, 2]));
+        console.log('list----------------------------------');
+        console.log(list);
+        const data: object = await sql.getDataAsync('SELECT * FROM corp_fee WHERE keyFee IN (@keyFee)', new AZData().add('@keyFee', [2, 3]));
+        console.log('data----------------------------------');
+        console.log(data);
+        const obj: string = await sql.getAsync('SELECT * FROM corp_fee WHERE keyFee IN (@keyFee)', new AZData().add('@keyFee', [2, 3]));
+        console.log('obj----------------------------------');
+        console.log(`val:${obj} / type:${typeof obj}`);
+        console.log(`val:${(obj as string)} / type:${typeof (String(obj))}`);
+    }
+    catch (e: any) {
+        console.log('test.e----------------------------------');
+        console.log(e);
+        process.exit(9);
+    }
 
     // const bSql: AZSql.Basic = new AZSql.Basic('corp_fee', sql);
     // bSql
@@ -173,6 +192,9 @@ const test: Function = async () => {
     qres = await sql.executeAsync(`SELECT * FROM test WHERE id in (@id)`, new AZData().add('@id', [1, 3]), false);
     console.log(qres);
     console.log(`stage.7`);
+    qres = await sql.executeAsync(`SELECT * FROM test WHERE id in (@id)`, {'@id': [1, 3]}, false);
+    console.log(qres);
+    console.log(`stage.8`);
 
     // console.log(`stage.8.1`);
     // let bSql: AZSql.Basic = new AZSql.Basic('test', sql);
