@@ -1464,11 +1464,15 @@ export namespace AZSql {
             return rtn_val;
         }
 
-        async doInsertAsync(): Promise<AZSql.Result> {
+        async doInsertAsync(_get_identity: boolean = false): Promise<AZSql.Result> {
             if (typeof this._azsql === 'undefined') {
                 return {header: null, err: new Error('AZSql is not defined')} as AZSql.Result;
             }
-            return await (this._azsql as AZSql).executeAsync(this.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.INSERT), this.getPreparedParameters());
+            const cur_identity: boolean = (this._azsql as AZSql).getIdentity();
+            _get_identity && (this._azsql as AZSql).setIdentity(true);
+            const rtn_val = await (this._azsql as AZSql).executeAsync(this.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.INSERT), this.getPreparedParameters());
+            (this._azsql as AZSql).setIdentity(cur_identity);
+            return rtn_val;
         }
 
         async doUpdateAsync(_require_where: boolean = true): Promise<AZSql.Result> {
@@ -1478,7 +1482,7 @@ export namespace AZSql {
             if (typeof this._azsql === 'undefined') {
                 return {header: null, err: new Error('AZSql is not defined')} as AZSql.Result;
             }
-            return await (this._azsql as AZSql).executeAsync(this.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.UPDATE), this.getPreparedParameters());
+            return await (this._azsql as AZSql).setIdentity(true).executeAsync(this.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.UPDATE), this.getPreparedParameters());
         }
 
         async doDeleteAsync(_require_where: boolean = true): Promise<AZSql.Result> {
@@ -1488,7 +1492,7 @@ export namespace AZSql {
             if (typeof this._azsql === 'undefined') {
                 return {header: null, err: new Error('AZSql is not defined')} as AZSql.Result;
             }
-            return await (this._azsql as AZSql).executeAsync(this.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.DELETE), this.getPreparedParameters());
+            return await (this._azsql as AZSql).setIdentity(true).executeAsync(this.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.DELETE), this.getPreparedParameters());
         }
     }
 }

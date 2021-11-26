@@ -182,31 +182,67 @@ const test: Function = async () => {
     // console.log(res);
 
 
+    const db: sqlite3.Database = new sqlite3.Database('/home/leeyh/priv/maven-repo/data/db.sqlite');
+
     
-    sql = new AZSql.Prepared({
-        sql_type: AZSql.SQL_TYPE.SQLITE,
-        server: ':memory:',
-    });
-    console.log(`stage.4`);
-    qres = await sql.executeAsync('CREATE TABLE test (id int, label varchar(20), desc text)');
-    console.log(qres);
-    console.log(`stage.5`);
-    qres = await sql.executeAsync(`INSERT INTO test (id, label, desc) VALUES (1, 'id is 1', 'description here')`, true);
-    console.log(qres);
-    qres = await sql.executeAsync(`INSERT INTO test (id, label, desc) VALUES (2, 'id is 2', 'description here')`, true);
-    console.log(qres);
-    qres = await sql.executeAsync(`INSERT INTO test (id, label, desc) VALUES (3, 'id is 3', 'description here')`, true);
-    console.log(qres);
-    console.log(`stage.6`);
-    qres = await sql.executeAsync(`SELECT * FROM test WHERE id in (@id)`, new AZData().add('@id', [1, 3]), false);
-    console.log(qres);
-    console.log(`stage.7`);
-    qres = await sql.executeAsync(`SELECT * FROM test WHERE id in (@id)`, {'@id': [1, 3]}, false);
-    console.log(qres);
-    console.log(`stage.8.1`);
-    let ares = await sql.getListAsync(`SELECT * FROM test WHERE id in (@id)`, {'@id': [1, 3]}, false);
-    console.log(ares);
-    console.log(`stage.8.2`);
+    let dres: AZSql.Result = await new AZSql.Basic('maven_repo', new AZSql(db))
+    .setIsPrepared(true)
+    .set('group_id', 'com.mparang')
+    .set('artifact_id', 'azlib')
+    .set('release_version', '0.1')
+    .set('latest_version', '0.1')
+    .set('created_at', `strftime('%s','now')`, AZSql.BQuery.VALUETYPE.QUERY)
+    .doInsertAsync(true);
+    console.log(`stage.4.1`);
+    console.log(dres);
+    
+    dres = await new AZSql.Basic('maven_repo', new AZSql(db))
+    .setIsPrepared(true)
+    .set('release_version', '0.2')
+    .set('latest_version', '0.2')
+    .where('group_id', 'com.mparang')
+    .where('artifact_id', 'azlib')
+    .doUpdateAsync(true);
+    console.log(`stage.4.2`);
+    console.log(dres);
+
+
+    sql = new AZSql.Prepared(db);
+    const tres = await sql.getDataAsync(
+`SELECT
+mr.repo_id, mr.group_id, mr.artifact_id, mr.release_version, mrd.version
+FROM
+maven_repo as mr
+LEFT JOIN maven_repo_detail as mrd
+    ON mr.repo_id = mrd.repo_id
+WHERE
+mr.group_id = @group_id
+AND mr.artifact_id = @artifact_id
+AND mrd.version = @version
+LIMIT 1`,
+        { '@group_id': 'com.mparang', '@artifact_id': 'azlib', '@version': '0.0.6' }
+    );
+    console.log(`stage.4.2`);
+    console.log(tres);
+    // qres = await sql.executeAsync('CREATE TABLE test (id int, label varchar(20), desc text)');
+    // console.log(qres);
+    // console.log(`stage.5`);
+    // qres = await sql.executeAsync(`INSERT INTO test (id, label, desc) VALUES (1, 'id is 1', 'description here')`, true);
+    // console.log(qres);
+    // qres = await sql.executeAsync(`INSERT INTO test (id, label, desc) VALUES (2, 'id is 2', 'description here')`, true);
+    // console.log(qres);
+    // qres = await sql.executeAsync(`INSERT INTO test (id, label, desc) VALUES (3, 'id is 3', 'description here')`, true);
+    // console.log(qres);
+    // console.log(`stage.6`);
+    // qres = await sql.executeAsync(`SELECT * FROM test WHERE id in (@id)`, new AZData().add('@id', [1, 3]), false);
+    // console.log(qres);
+    // console.log(`stage.7`);
+    // qres = await sql.executeAsync(`SELECT * FROM test WHERE id in (@id)`, {'@id': [1, 3]}, false);
+    // console.log(qres);
+    // console.log(`stage.8.1`);
+    // let ares = await sql.getListAsync(`SELECT * FROM test WHERE id in (@id)`, {'@id': [1, 3]}, false);
+    // console.log(ares);
+    // console.log(`stage.8.2`);
 
     // console.log(`stage.8.1`);
     // let bSql: AZSql.Basic = new AZSql.Basic('test', sql);
