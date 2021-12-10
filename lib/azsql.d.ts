@@ -9,10 +9,11 @@ export declare class AZSql {
     protected _query: string | null;
     protected _parameters: AZData | null;
     protected _return_parameters: AZData | null;
-    private _identity;
+    protected _results: Array<any> | null;
+    protected _identity: boolean;
     protected _in_transaction: boolean;
     protected _transaction: any;
-    protected _transaction_result: AZData | null;
+    protected _transaction_result: Array<any> | null;
     protected _transaction_on_commit: Function | null;
     protected _transaction_on_rollback: Function | null;
     protected _is_stored_procedure: boolean;
@@ -26,7 +27,8 @@ export declare class AZSql {
     clearQuery(): AZSql;
     setPrepared(prepared: boolean): AZSql;
     get isPrepared(): boolean;
-    getPreapredQueryAndParams(): [string | null, Array<string> | null];
+    getQueryAndParams(): [string | null, Array<string> | null];
+    getReturnQuery(): string | null;
     setParameters(parameters: AZData | object): AZSql;
     getParamters(): AZData | null;
     getParamter<Type>(key: string): Type;
@@ -34,6 +36,7 @@ export declare class AZSql {
     addParamters(paramters: AZData): AZSql;
     clearParameters(): AZSql;
     removeParamters(): AZSql;
+    hasParameters(): boolean;
     setReturnParameters(parameters: AZData | object): AZSql;
     getReturnParamters(): AZData | null;
     getReturnParamter<Type>(key: string): Type;
@@ -42,6 +45,19 @@ export declare class AZSql {
     updateReturnParamter(key: string | number, value: any): AZSql;
     clearReturnParameters(): AZSql;
     removeReturnParamters(): AZSql;
+    hasReturnParameters(): boolean;
+    protected setResults(rows: Array<any>): AZSql;
+    protected addResult(row: any): AZSql;
+    protected clearResults(): AZSql;
+    protected setTransactionResults(rows: Array<any>): AZSql;
+    protected addTransactionResult(row: any): AZSql;
+    clearTransactionResults(): AZSql;
+    hasTransactionResults(): boolean;
+    getTransactionResults(): Array<any> | null;
+    getTransactionResult(idx: number): any;
+    hasResults(): boolean;
+    getResults(): Array<any> | null;
+    getResult(idx: number): any;
     setIdentity(identity: boolean): AZSql;
     getIdentity(): boolean;
     setIsStoredProcedure(is_stored_procedure: boolean): AZSql;
@@ -53,9 +69,9 @@ export declare class AZSql {
     rollback(): Promise<void>;
     removeTran(): AZSql;
     getAsync(query_or_id?: string | boolean, param_or_id?: AZData | object | boolean, return_param_or_id?: AZData | object | boolean, is_sp?: boolean): Promise<any>;
-    getDataAsync(query_or_id?: string | boolean, param_or_id?: AZData | object | boolean, return_param_or_id?: AZData | object | boolean, is_sp?: boolean): Promise<object>;
+    getDataAsync(query_or_id?: string | boolean, param_or_id?: AZData | object | boolean, return_param_or_id?: AZData | object | boolean, is_sp?: boolean): Promise<object | null>;
     getListAsync(query_or_id?: string | boolean, param_or_id?: AZData | object | boolean, return_param_or_id?: AZData | object | boolean, is_sp?: boolean): Promise<Array<any>>;
-    executeAsync(query_or_id?: string | boolean, param_or_id?: AZData | object | boolean, return_param_or_id?: AZData | object | boolean, is_sp?: boolean): Promise<AZSql.Result>;
+    executeAsync(query_or_id?: string | boolean, param_or_id?: AZData | object | boolean, return_param_or_id?: AZData | object | boolean, is_sp?: boolean): Promise<number>;
     get connected(): boolean;
     get inTransaction(): boolean;
     get option(): AZSql.Option | null;
@@ -220,8 +236,8 @@ export declare namespace AZSql {
         where(column_or_data: BQuery.Condition | BQuery.And | BQuery.Or | string, value?: any, where_type?: BQuery.WHERETYPE, value_type?: BQuery.VALUETYPE): AZSql.Basic;
         clearWhere(): AZSql.Basic;
         doSelectAsync(select?: string): Promise<Array<any>>;
-        doInsertAsync(_get_identity?: boolean): Promise<AZSql.Result>;
-        doUpdateAsync(_require_where?: boolean): Promise<AZSql.Result>;
-        doDeleteAsync(_require_where?: boolean): Promise<AZSql.Result>;
+        doInsertAsync(_get_identity?: boolean): Promise<number>;
+        doUpdateAsync(_require_where?: boolean): Promise<number>;
+        doDeleteAsync(_require_where?: boolean): Promise<number>;
     }
 }
