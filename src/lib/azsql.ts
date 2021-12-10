@@ -52,7 +52,7 @@ export class AZSql {
     }
 
     clear(): AZSql {
-        this.setIsStoredProcedure(false);
+        this.setStoredProcedure(false);
         this.setPrepared(false);
         this.setIdentity(false);
         this.clearQuery();
@@ -339,16 +339,16 @@ export class AZSql {
         return this;
     }
 
-    getIdentity(): boolean {
+    isIdentity(): boolean {
         return this._identity;
     }
 
-    setIsStoredProcedure(is_stored_procedure: boolean): AZSql {
+    setStoredProcedure(is_stored_procedure: boolean): AZSql {
         this._is_stored_procedure = is_stored_procedure;
         return this;
     }
 
-    getIsStoredProcedure(): boolean {
+    isStoredProcedure(): boolean {
         return this._is_stored_procedure;
     }
 
@@ -530,7 +530,7 @@ export class AZSql {
         return_param_or_id?: AZData|object|boolean,
         is_sp?: boolean
     ): Promise<number> {
-        typeof is_sp !== 'undefined' && this.setIsStoredProcedure(is_sp);
+        typeof is_sp !== 'undefined' && this.setStoredProcedure(is_sp);
         if (typeof return_param_or_id !== 'undefined') {
             // console.debug(`type - return_param_or_id:${typeof return_param_or_id}`);
             if (typeof return_param_or_id !== 'boolean') {
@@ -593,7 +593,7 @@ export class AZSql {
                                 // console.log(`res:`);
                                 // console.log(res);
                                 // if ((res as any)[1] !== null) throw (res as any)[1] as Error;
-                                // rtn_val = this.getIdentity() ?
+                                // rtn_val = this.isIdentity() ?
                                 //     ((res as Array<any>)[0] as ResultSetHeader).insertId :
                                 //     ((res as Array<any>)[0] as ResultSetHeader).affectedRows;
                                 // console.log(`type:${(res as Array<any>)[0] instanceof Array}`);
@@ -630,12 +630,12 @@ export class AZSql {
                                     // rtn_val.affected = header.affectedRows;
                                     // rtn_val.identity = header.insertId;
                                     // rtn_val.header = header;
-                                    rtn_val = this.getIdentity() ? header.insertId : header.affectedRows;
+                                    rtn_val = this.isIdentity() ? header.insertId : header.affectedRows;
                                     //
                                     this.inTransaction && this.addTransactionResult(rtn_val);
                                 }
                                 //
-                                if (this.getIsStoredProcedure()) {
+                                if (this.isStoredProcedure()) {
                                     const return_query: string|null = this.getReturnQuery();
                                     if (return_query !== null) {
                                         const [r_res, r_err] = await (this._sql_connection as mysql2.Connection).execute(return_query as string)
@@ -699,13 +699,13 @@ export class AZSql {
                                     // rtn_val.affected = header.affectedRows;
                                     // rtn_val.identity = header.insertId;
                                     // rtn_val.header = header;
-                                    rtn_val = this.getIdentity() ? header.insertId : header.affectedRows;
+                                    rtn_val = this.isIdentity() ? header.insertId : header.affectedRows;
                                     //
                                     this.inTransaction && this.addTransactionResult(rtn_val);
                                 }
                             }
                             //
-                            if (this.getIsStoredProcedure()) {
+                            if (this.isStoredProcedure()) {
                                 const return_query: string|null = this.getReturnQuery();
                                 if (return_query !== null) {
                                     const [r_res, r_err] = await (this._sql_connection as mysql2.Connection).execute(return_query as string)
@@ -747,7 +747,7 @@ export class AZSql {
                             const [res, err] = await new Promise((resolve: any, _reject: any) => {
                                 const stmt: sqlite3.Statement = (this._sql_connection as sqlite3.Database).prepare(query as string, (_res: any) => {
                                     if (_res === null) {
-                                        if (this.getIdentity()) {
+                                        if (this.isIdentity()) {
                                             stmt?.run(params, function (err: Error) {
                                                 if (err) {
                                                     resolve([null, err]);
@@ -785,13 +785,13 @@ export class AZSql {
                                 else {
                                     // rtn_val.affected = (res as sqlite3.RunResult).changes;
                                     // rtn_val.identity = (res as sqlite3.RunResult).lastID;
-                                    rtn_val = this.getIdentity() ? (res as sqlite3.RunResult).lastID : (res as sqlite3.RunResult).changes;
+                                    rtn_val = this.isIdentity() ? (res as sqlite3.RunResult).lastID : (res as sqlite3.RunResult).changes;
                                 }
                             }
                         }
                         else {
                             const [res, err] = await new Promise((resolve: any, _reject: any) => {
-                                if (this.getIdentity()) {
+                                if (this.isIdentity()) {
                                     (this._sql_connection as sqlite3.Database).run(this._query as string, function (err: Error) {
                                         if (err) {
                                             resolve([null, err]);
@@ -824,7 +824,7 @@ export class AZSql {
                                 else {
                                     // rtn_val.affected = (res as sqlite3.RunResult).changes;
                                     // rtn_val.identity = (res as sqlite3.RunResult).lastID;
-                                    rtn_val = this.getIdentity() ? (res as sqlite3.RunResult).lastID : (res as sqlite3.RunResult).changes;
+                                    rtn_val = this.isIdentity() ? (res as sqlite3.RunResult).lastID : (res as sqlite3.RunResult).changes;
                                 }
                             }
                         }
@@ -854,7 +854,7 @@ export class AZSql {
     //     return_param_or_id?: AZData|boolean,
     //     is_sp?: boolean
     // ): Promise<AZSql.Result> {
-    //     typeof is_sp !== 'undefined' && this.setIsStoredProcedure(is_sp);
+    //     typeof is_sp !== 'undefined' && this.setStoredProcedure(is_sp);
     //     if (typeof return_param_or_id !== 'undefined') {
     //         if (return_param_or_id instanceof AZData) {
     //             this.setReturnParameters(return_param_or_id as AZData);
@@ -942,7 +942,13 @@ export namespace AZSql {
     export class Prepared extends AZSql {
         constructor(connection_or_option: AZSql.Option|mysql2.Connection|mysql2.Pool|sqlite3.Database) {
             super(connection_or_option);
-            this.setPrepared(true);
+            // this.setPrepared(true);
+            this._is_prepared = true;
+        }
+
+        override setPrepared(prepared: boolean): Prepared {
+            // this._is_prepared = prepared;
+            return this;
         }
     }
 
@@ -965,7 +971,7 @@ export namespace AZSql {
             return this._prepared;
         }
 
-        setIsPrepared(prepared: boolean): BQuery {
+        setPrepared(prepared: boolean): BQuery {
             this._prepared = prepared;
             return this;
         }
@@ -1631,8 +1637,8 @@ export namespace AZSql {
             }
         }
 
-        override setIsPrepared(prepared: boolean): AZSql.Basic {
-            super.setIsPrepared(prepared);
+        override setPrepared(prepared: boolean): AZSql.Basic {
+            super.setPrepared(prepared);
             return this;
         }
 
@@ -1678,12 +1684,12 @@ export namespace AZSql {
                 // return {header: null, err: new Error('AZSql is not defined')} as AZSql.Result;
                 throw new Error('AZSql is not defined');
             }
-            // const cur_identity: boolean = (this._azsql as AZSql).getIdentity();
+            // const cur_identity: boolean = (this._azsql as AZSql).isIdentity();
             // _get_identity && (this._azsql as AZSql).setIdentity(true);
             // const rtn_val = await (this._azsql as AZSql).executeAsync(this.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.INSERT), this.getPreparedParameters());
             // (this._azsql as AZSql).setIdentity(cur_identity);
             // return rtn_val;
-            const cur_identity: boolean = (this._azsql as AZSql).getIdentity();
+            const cur_identity: boolean = (this._azsql as AZSql).isIdentity();
             _get_identity && (this._azsql as AZSql).setIdentity(true);
             const rtn_val: number = await (this._azsql as AZSql).executeAsync(this.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.INSERT), this.getPreparedParameters());
             (this._azsql as AZSql).setIdentity(cur_identity);
@@ -1700,7 +1706,7 @@ export namespace AZSql {
                 throw new Error('AZSql is not defined');
             }
             // return await (this._azsql as AZSql).executeAsync(this.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.UPDATE), this.getPreparedParameters());
-            const cur_identity: boolean = (this._azsql as AZSql).getIdentity();
+            const cur_identity: boolean = (this._azsql as AZSql).isIdentity();
             (this._azsql as AZSql).setIdentity(false);
             const rtn_val: number = await (this._azsql as AZSql).executeAsync(this.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.UPDATE), this.getPreparedParameters());
             (this._azsql as AZSql).setIdentity(cur_identity);
@@ -1717,7 +1723,7 @@ export namespace AZSql {
                 throw new Error('AZSql is not defined');
             }
             // return await (this._azsql as AZSql).setIdentity(true).executeAsync(this.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.DELETE), this.getPreparedParameters());
-            const cur_identity: boolean = (this._azsql as AZSql).getIdentity();
+            const cur_identity: boolean = (this._azsql as AZSql).isIdentity();
             (this._azsql as AZSql).setIdentity(false);
             const rtn_val: number = await (this._azsql as AZSql).executeAsync(this.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.DELETE), this.getPreparedParameters());
             (this._azsql as AZSql).setIdentity(cur_identity);

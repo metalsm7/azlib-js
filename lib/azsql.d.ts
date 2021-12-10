@@ -59,9 +59,9 @@ export declare class AZSql {
     getResults(): Array<any> | null;
     getResult(idx: number): any;
     setIdentity(identity: boolean): AZSql;
-    getIdentity(): boolean;
-    setIsStoredProcedure(is_stored_procedure: boolean): AZSql;
-    getIsStoredProcedure(): boolean;
+    isIdentity(): boolean;
+    setStoredProcedure(is_stored_procedure: boolean): AZSql;
+    isStoredProcedure(): boolean;
     openAsync(): Promise<boolean>;
     closeAsync(): Promise<void>;
     beginTran(_on_commit?: Function, _on_rollback?: Function): Promise<void>;
@@ -120,6 +120,7 @@ export declare namespace AZSql {
     };
     class Prepared extends AZSql {
         constructor(connection_or_option: AZSql.Option | mysql2.Connection | mysql2.Pool | sqlite3.Database);
+        setPrepared(prepared: boolean): Prepared;
     }
     class BQuery {
         protected _table_name: string | null;
@@ -129,7 +130,7 @@ export declare namespace AZSql {
         protected _sql_select: string | null;
         constructor(table_name?: string, prepared?: boolean);
         isPrepared(): boolean;
-        setIsPrepared(prepared: boolean): BQuery;
+        setPrepared(prepared: boolean): BQuery;
         clear(): BQuery;
         set(column: string | AZSql.BQuery.SetData, value?: any, value_type?: BQuery.VALUETYPE): BQuery;
         clearSelect(): BQuery;
@@ -229,7 +230,7 @@ export declare namespace AZSql {
     class Basic extends AZSql.BQuery {
         private _azsql;
         constructor(table_name: string, azsql_or_option?: AZSql | AZSql.Option, prepared?: boolean);
-        setIsPrepared(prepared: boolean): AZSql.Basic;
+        setPrepared(prepared: boolean): AZSql.Basic;
         clear(): AZSql.Basic;
         set(column: string | AZSql.BQuery.SetData, value?: any, value_type?: BQuery.VALUETYPE): AZSql.Basic;
         clearSet(): BQuery;

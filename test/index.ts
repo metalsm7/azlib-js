@@ -8,7 +8,7 @@ const rest_sqlite: Function = async () => {
 
     
     let res: number = await new AZSql.Basic('maven_repo', new AZSql(db))
-    .setIsPrepared(true)
+    .setPrepared(true)
     .set('group_id', 'com.mparang')
     .set('artifact_id', 'azlib')
     .set('release_version', '0.1')
@@ -19,7 +19,7 @@ const rest_sqlite: Function = async () => {
     console.log(res);
     
     res = await new AZSql.Basic('maven_repo', new AZSql(db))
-    .setIsPrepared(true)
+    .setPrepared(true)
     .set('release_version', '0.2')
     .set('latest_version', '0.2')
     .where('group_id', 'com.mparang')
@@ -191,7 +191,7 @@ const test_mysql: Function = async () => {
     console.log('mres----------------------------------');
     console.log(mres);
 
-    mres = await sql.clear().setPrepared(false).setIsStoredProcedure(true).executeAsync('call corp_board_getList(@o_code, @o_ret, @type, @offset, @limit)', {'@type': 1, '@offet': 0, '@limit': 10}, new AZData().add('@o_code', null).add('@o_ret', null));
+    mres = await sql.clear().setPrepared(false).setStoredProcedure(true).executeAsync('call corp_board_getList(@o_code, @o_ret, @type, @offset, @limit)', {'@type': 1, '@offet': 0, '@limit': 10}, new AZData().add('@o_code', null).add('@o_ret', null));
     console.log('mres----------------------------------');
     console.log(mres);
     console.log('results----------------------------------');
@@ -263,7 +263,7 @@ const test_mysql: Function = async () => {
 
     const bSql: AZSql.Basic = new AZSql.Basic('corp_fee', sql);
     let res: Array<any> = await bSql
-        .setIsPrepared(true)
+        .setPrepared(true)
         .where('keyCorp', [1,2,3], AZSql.BQuery.WHERETYPE.IN)
         // .where('keyFee', 21, AZSql.BQuery.WHERETYPE.IN)
         .doSelectAsync();
