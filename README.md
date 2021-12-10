@@ -1,30 +1,57 @@
-# azlib / Com.Mparang.AZLib
-- C#, Java, JavaScript에서 동일한 방식으로 데이터 핸들링을 위한 라이브러리 작성이 목표
-- C#은 .Net 4.0, 4.5.2, Standard1.4, CoreApp1.0 를 지원합니다
-
-## Install
-1) NPM
+# Install
 ```
-$ npm i azlib
+$ npm install azlib
 ```
 
-## AZSql
-### Database 연결 및 데이터 처리 헬퍼 (현재 mysql, sqlite만 지원)
-- PreparedStatement 처리 지원
-- StoredProcedure 처리 지원
-- Transaction 처리 지원 (처리중 오류 발생시 바로 Rollback 처리되며, 이후 예외처리를 위한 Action을 호출하게 됩니다)
-
-기본적인 사용법은 아래와 같습니다.
-
+# 초기화
+- 만들어진 connection 사용
 ```ts
-// 예제를 위해 선언된 DB연결 옵션
-const option: AZSql.Option = {
-    host: '127.0.0.1',
-    user: 'test',
-    password: 'test',
-    database: 'test'
-};
+import { createConnection } from 'mysql2/promise';
+const pool = createConnection({...});
+
+const sql: AZSql = new AZSql(pool);
 ```
+- 만들어진 pool 사용
+```ts
+import { createPool } from 'mysql2/promise';
+const pool = createPool({...});
+
+const sql: AZSql = new AZSql(pool);
+```
+- 연결정보를 전달하여 직접 connection 생성
+```ts
+const sql: AZSql = new AZSql({
+    sql_type: AZSql.SQL_TYPE.MYSQL,
+    server: '주소',
+    id: '아이디',
+    pw: '비번',
+    catalog: '카탈로그/DB명'
+} as AZSql.Option);
+```
+
+# API
+- executeAsync
+- getListAsync
+- getDataAsync
+- getAsync
+
+## executeAsync
+- executeAsync(query: string): number
+- executeAsync(query: string, params: object|AZData): number
+- executeAsync(query: string, params: object|AZData, return_params: object|AZData): number
+
+## getListAsync
+- getListAsync(query: string): Array<any>
+- getListAsync(query: string, params: object|AZData): Array<any>
+
+## getDataAsync
+- getDataAsync(query: string): object|null
+- getDataAsync(query: string, params: object|AZData): object|null
+
+## getAsync
+- getAsync(query: string): any
+- getAsync(query: string, params: object|AZData): any
+
 ```ts
 // SELECT 사용법 #1
 const sql: AZSql = new AZSql(option);

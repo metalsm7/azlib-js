@@ -569,9 +569,9 @@ export class AZSql {
         if (this.inTransaction && !this.connected) return Promise.reject(new Error('Not connected'));
         if (this.connected) {
             try {
+                const [query, params] = this.getQueryAndParams();
                 switch (this.option?.sql_type) {
                     case AZSql.SQL_TYPE.MYSQL:
-                        const [query, params] = this.getQueryAndParams();
                         if (is_prepared) {
                             // console.log(`query:`);
                             // console.log(query);
@@ -742,92 +742,94 @@ export class AZSql {
                         }
                         break;
                     case AZSql.SQL_TYPE.SQLITE:
-                        if (is_prepared) {
-                            const [query, params] = this.getQueryAndParams();
-                            const [res, err] = await new Promise((resolve: any, _reject: any) => {
-                                const stmt: sqlite3.Statement = (this._sql_connection as sqlite3.Database).prepare(query as string, (_res: any) => {
-                                    if (_res === null) {
-                                        if (this.isIdentity()) {
-                                            stmt?.run(params, function (err: Error) {
-                                                if (err) {
-                                                    resolve([null, err]);
-                                                }
-                                                else {
-                                                    resolve([this as sqlite3.RunResult, null]);
-                                                }
-                                            });
-                                        }
-                                        else {
-                                            stmt?.all(params, function (err: Error, rows: Array<any>) {
-                                                if (err) {
-                                                    resolve([null, err]);
-                                                }
-                                                else {
-                                                    resolve([rows, null]);
-                                                }
-                                            });
-                                        }
+                        // if (is_prepared) {
+                        // const [query, params] = this.getQueryAndParams();
+                        const [res, err] = await new Promise((resolve: any, _reject: any) => {
+                            const stmt: sqlite3.Statement = (this._sql_connection as sqlite3.Database).prepare(query as string, (_res: any) => {
+                                if (_res === null) {
+                                    if (this.isIdentity()) {
+                                        stmt?.run(params, function (err: Error) {
+                                            if (err) {
+                                                resolve([null, err]);
+                                            }
+                                            else {
+                                                resolve([this as sqlite3.RunResult, null]);
+                                            }
+                                        });
+                                        stmt?.finalize();
                                     }
                                     else {
-                                        resolve([null, _res]);
+                                        stmt?.all(params, function (err: Error, rows: Array<any>) {
+                                            if (err) {
+                                                resolve([null, err]);
+                                            }
+                                            else {
+                                                resolve([rows, null]);
+                                            }
+                                        });
+                                        stmt?.finalize();
                                     }
-                                });
-                            });
-                            if (err) {
-                                // rtn_val.err = err;
-                                throw err;
-                            }
-                            else {
-                                if (Array.isArray(res)) {
-                                    // rtn_val.rows = res;
-                                    this.setResults(res);
                                 }
                                 else {
-                                    // rtn_val.affected = (res as sqlite3.RunResult).changes;
-                                    // rtn_val.identity = (res as sqlite3.RunResult).lastID;
-                                    rtn_val = this.isIdentity() ? (res as sqlite3.RunResult).lastID : (res as sqlite3.RunResult).changes;
+                                    resolve([null, _res]);
                                 }
-                            }
+                            });
+                        });
+                        if (err) {
+                            // rtn_val.err = err;
+                            throw err;
                         }
                         else {
-                            const [res, err] = await new Promise((resolve: any, _reject: any) => {
-                                if (this.isIdentity()) {
-                                    (this._sql_connection as sqlite3.Database).run(this._query as string, function (err: Error) {
-                                        if (err) {
-                                            resolve([null, err]);
-                                        }
-                                        else {
-                                            resolve([this as sqlite3.RunResult, null]);
-                                        }
-                                    });
-                                }
-                                else {
-                                    (this._sql_connection as sqlite3.Database).all(this._query as string, (err: Error, rows: Array<any>) => {
-                                        if (err) {
-                                            resolve([null, err]);
-                                        }
-                                        else {
-                                            resolve([rows, null]);
-                                        }
-                                    });
-                                }
-                            });
-                            if (err) {
-                                // rtn_val.err = err;
-                                throw err;
+                            if (Array.isArray(res)) {
+                                // rtn_val.rows = res;
+                                this.setResults(res);
                             }
                             else {
-                                if (Array.isArray(res)) {
-                                    // rtn_val.rows = res;
-                                    this.setResults(res);
-                                }
-                                else {
-                                    // rtn_val.affected = (res as sqlite3.RunResult).changes;
-                                    // rtn_val.identity = (res as sqlite3.RunResult).lastID;
-                                    rtn_val = this.isIdentity() ? (res as sqlite3.RunResult).lastID : (res as sqlite3.RunResult).changes;
-                                }
+                                // rtn_val.affected = (res as sqlite3.RunResult).changes;
+                                // rtn_val.identity = (res as sqlite3.RunResult).lastID;
+                                rtn_val = this.isIdentity() ? (res as sqlite3.RunResult).lastID : (res as sqlite3.RunResult).changes;
                             }
                         }
+                        // }
+                        // else {
+                        //     const [res, err] = await new Promise((resolve: any, _reject: any) => {
+                        //         if (this.isIdentity()) {
+                        //             (this._sql_connection as sqlite3.Database).run(this._query as string, function (err: Error) {
+                        //                 if (err) {
+                        //                     resolve([null, err]);
+                        //                 }
+                        //                 else {
+                        //                     resolve([this as sqlite3.RunResult, null]);
+                        //                 }
+                        //             });
+                        //         }
+                        //         else {
+                        //             (this._sql_connection as sqlite3.Database).all(this._query as string, (err: Error, rows: Array<any>) => {
+                        //                 if (err) {
+                        //                     resolve([null, err]);
+                        //                 }
+                        //                 else {
+                        //                     resolve([rows, null]);
+                        //                 }
+                        //             });
+                        //         }
+                        //     });
+                        //     if (err) {
+                        //         // rtn_val.err = err;
+                        //         throw err;
+                        //     }
+                        //     else {
+                        //         if (Array.isArray(res)) {
+                        //             // rtn_val.rows = res;
+                        //             this.setResults(res);
+                        //         }
+                        //         else {
+                        //             // rtn_val.affected = (res as sqlite3.RunResult).changes;
+                        //             // rtn_val.identity = (res as sqlite3.RunResult).lastID;
+                        //             rtn_val = this.isIdentity() ? (res as sqlite3.RunResult).lastID : (res as sqlite3.RunResult).changes;
+                        //         }
+                        //     }
+                        // }
                         break;
                 }
             }
