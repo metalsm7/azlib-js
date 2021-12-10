@@ -4,11 +4,12 @@ import * as mysql from 'mysql2/promise';
 import * as sqlite3 from 'sqlite3';
 
 const test_sqlite: Function = async () => {
+
     const db: sqlite3.Database = new sqlite3.Database('/Users/dev/development/priv/minrepo/data/db/db.sqlite');
 
     console.log(`===========================================`);
     let sql: AZSql.Basic = await new AZSql.Basic('maven_repo', new AZSql(db))
-        .setPrepared(false)
+        .setPrepared(true)
         .set('group_id', 'com.mparang')
         .set('artifact_id', 'azlib')
         .set('release_version', '0.1.0')
@@ -21,9 +22,9 @@ const test_sqlite: Function = async () => {
 
     console.log(`===========================================`);
     sql = await new AZSql.Basic('maven_repo', new AZSql(db))
-        .setPrepared(false)
+        .setPrepared(true)
         .set('updated_at', `strftime('%s','now')`, AZSql.BQuery.VALUETYPE.QUERY)
-        .where('repo_id', 8);
+        .where('repo_id', id);
     console.log(`publish - query:${sql.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.UPDATE)}`);
     console.log(`publish - params:${sql.getPreparedParameters().toJsonString()}`);
     let affected: number = await sql.doUpdateAsync();
@@ -31,16 +32,20 @@ const test_sqlite: Function = async () => {
 
     console.log(`===========================================`);
     sql = await new AZSql.Basic('maven_repo', new AZSql(db))
-        .setPrepared(false)
-        .where('repo_id', 8);
+        .setPrepared(true)
+        .where('repo_id', id);
     console.log(`publish - query:${sql.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.SELECT)}`);
     console.log(`publish - params:${sql.getPreparedParameters().toJsonString()}`);
     let res: any = await sql.doSelectAsync();
     console.log(`publish - res:`);
     console.log(res);
+
+
+    console.log(`\n\n****************************************\n\n`);
 };
 
 const test_mysql: Function = async () => {
+
     const pool = mysql.createPool({
         host: 'localhost',
         user: 'scm',
@@ -140,6 +145,9 @@ const test_mysql: Function = async () => {
     console.log(sql.getResults());
     console.log('returns----------------------------------');
     console.log(sql.getReturnParamters()?.toJsonString());
+
+
+    console.log(`\n\n****************************************\n\n`);
 
     process.exit(0);
     
@@ -275,5 +283,5 @@ const test_mysql: Function = async () => {
     process.exit(0);
 };
 
-// test_mysql();
+test_mysql();
 test_sqlite();

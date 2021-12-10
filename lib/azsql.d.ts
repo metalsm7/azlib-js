@@ -240,7 +240,7 @@ export declare namespace AZSql {
         where(column_or_data: BQuery.Condition | BQuery.And | BQuery.Or | string, value?: any, where_type?: BQuery.WHERETYPE, value_type?: BQuery.VALUETYPE): AZSql.Basic;
         clearWhere(): AZSql.Basic;
         doSelectAsync(select?: string): Promise<Array<any>>;
-        doInsertAsync(_get_identity?: boolean): Promise<number>;
+        doInsertAsync(req_identity?: boolean): Promise<number>;
         doUpdateAsync(_require_where?: boolean): Promise<number>;
         doDeleteAsync(_require_where?: boolean): Promise<number>;
     }
