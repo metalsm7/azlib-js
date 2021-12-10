@@ -20,13 +20,16 @@ export declare class AZSql {
     protected _sql_connection: mysql2.Connection | mysql2.Pool | sqlite3.Database | null;
     protected _sql_pool: mysql2.Pool | null;
     protected _is_prepared: boolean;
+    protected _is_modify: boolean;
     constructor(connection_or_option: AZSql.Option | mysql2.Connection | mysql2.Pool | sqlite3.Database);
     clear(): AZSql;
     setQuery(query: string): AZSql;
     getQuery(_preapred?: boolean): string | null;
     clearQuery(): AZSql;
+    setModify(modify: boolean): AZSql;
+    isModify(): boolean;
     setPrepared(prepared: boolean): AZSql;
-    get isPrepared(): boolean;
+    isPrepared(): boolean;
     getQueryAndParams(): [string | null, Array<string> | null];
     getReturnQuery(): string | null;
     setParameters(parameters: AZData | object): AZSql;

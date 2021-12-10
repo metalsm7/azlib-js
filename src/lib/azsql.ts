@@ -31,9 +31,9 @@ export class AZSql {
 
     protected _is_prepared: boolean = false;
 
+    protected _is_modify: boolean = false; // sqlite용
+
     constructor(connection_or_option: AZSql.Option|mysql2.Connection|mysql2.Pool|sqlite3.Database) {
-        // console.log(connection_or_option);
-        // console.log(typeof connection_or_option);
         if ((connection_or_option as AZSql.Option)['sql_type'] !== undefined) {
             this._option = connection_or_option as AZSql.Option;
         }
@@ -52,6 +52,7 @@ export class AZSql {
     }
 
     clear(): AZSql {
+        this.setModify(false);
         this.setStoredProcedure(false);
         this.setPrepared(false);
         this.setIdentity(false);
@@ -77,28 +78,34 @@ export class AZSql {
         return this;
     }
 
+    setModify(modify: boolean): AZSql {
+        this._is_modify = modify;
+        return this;
+    }
+
+    isModify(): boolean {
+        return this._is_modify;
+    }
+
     setPrepared(prepared: boolean): AZSql {
         this._is_prepared = prepared;
         return this;
     }
 
-    get isPrepared(): boolean {
+    isPrepared(): boolean {
         return this._is_prepared;
     }
 
     // getPreapredQueryAndParams(): [string|null, Array<string>|null] {
-    //     // console.log(`getPreparedQueryAndParams - size:${this._parameters?.size()}`);
     //     if (this._parameters === null) return [this._query, []];
     //     let query: string = this._query as string;
     //     const param: Array<string> = new Array<string>();
     //     const keys: Array<string> = this._parameters?.getKeys();
     //     const serialized_keys: string = keys.join('|');
     //     const regex: RegExp = new RegExp(`([^@])(${serialized_keys})([\r\n\\s\\t,)]|$)`);
-    //     // console.log(`getPreparedQueryAndParams - serialized_keys:${serialized_keys} - search:${query.search(regex)}`);
     //     while (query.search(regex) > -1) {
     //         const match_array: RegExpMatchArray = query.match(regex) as RegExpMatchArray;
     //         const key: string|null = match_array && match_array.length > 2 ? match_array[2] : null;
-    //         // console.log(`getPreparedQueryAndParams - key:${key}`);
     //         if (key == null) continue;
     //         const val: any = this._parameters?.get(key);
     //         if (typeof val !== 'undefined' && Array.isArray(val)) {
@@ -118,18 +125,18 @@ export class AZSql {
     // }
 
     getQueryAndParams(): [string|null, Array<string>|null] {
-        // console.log(`getQueryAndParams - size:${this._parameters?.size()}`);
+        if (!this.isPrepared()) {
+            return [this._query, []];
+        }
         if (this._parameters === null) return [this._query, []];
         let query: string = this._query as string;
         const param: Array<string> = new Array<string>();
         const keys: Array<string> = this._parameters?.getKeys();
         const serialized_keys: string = keys.join('|');
         const regex: RegExp = new RegExp(`([^@])(${serialized_keys})([\r\n\\s\\t,)]|$)`);
-        // console.log(`getQueryAndParams - serialized_keys:${serialized_keys} - search:${query.search(regex)}`);
         while (query.search(regex) > -1) {
             const match_array: RegExpMatchArray = query.match(regex) as RegExpMatchArray;
             const key: string|null = match_array && match_array.length > 2 ? match_array[2] : null;
-            // console.log(`getQueryAndParams - key:${key}`);
             if (key == null) continue;
             const val: any = this._parameters?.get(key);
             if (typeof val !== 'undefined' && Array.isArray(val)) {
@@ -214,7 +221,6 @@ export class AZSql {
         return this._parameters !== null && this._parameters instanceof AZData && this._parameters.size() > 0;
     }
     
-
     setReturnParameters(parameters: AZData|object): AZSql {
         if (this._return_parameters === null) {
             this._return_parameters = new AZData();
@@ -372,12 +378,10 @@ export class AZSql {
                 break;
         }
         this._connected = this._open_self = this._sql_connection !== null;
-        // console.log(`openAsync - connected:${this.connected} / connection:${this._sql_connection} / sql_type:${this._option?.sql_type}`);
         return this._connected;
     }
 
     async closeAsync(): Promise<void> {
-        // console.log(`closeAsync.BEGIN - sql_type:${this._option?.sql_type}`);
         if (this.inTransaction || !this._open_self) return;
         switch (this._option?.sql_type) {
             case AZSql.SQL_TYPE.MYSQL:
@@ -386,7 +390,6 @@ export class AZSql {
             case AZSql.SQL_TYPE.SQLITE:
                 await new Promise((resolve: any, reject: any) => {
                     (this._sql_connection as sqlite3.Database).close((_res: any) => {
-                        // console.log(`closeAsync.close - _res:${_res}`);
                         if (_res === null) resolve();
                         reject(_res);
                     })
@@ -396,7 +399,6 @@ export class AZSql {
         this._sql_connection = null;
         this._connected = false;
         this._open_self = false;
-        // console.log(`closeAsync - connected:${this.connected} / connection:${this._sql_connection} / sql_type:${this._option?.sql_type}`);
     }
 
     async beginTran(_on_commit?: Function, _on_rollback?: Function): Promise<void> {
@@ -431,7 +433,6 @@ export class AZSql {
                         await (this._sql_connection as mysql2.Connection).commit();
                         break;
                 }
-                // console.log(`commit - _transaction_on_commit:${this._transaction_on_commit}`);
                 this._transaction_on_commit && this._transaction_on_commit();
             }
         }
@@ -564,7 +565,7 @@ export class AZSql {
         if (!this.connected) await this.openAsync();
 
         // const is_prepared: boolean = this.isPrepared || this.getParamters() !== null && ((this.getParamters() as AZData).size() > 0);
-        const is_prepared: boolean = this.isPrepared;
+        const is_prepared: boolean = this.isPrepared();
 
         if (this.inTransaction && !this.connected) return Promise.reject(new Error('Not connected'));
         if (this.connected) {
@@ -573,10 +574,6 @@ export class AZSql {
                 switch (this.option?.sql_type) {
                     case AZSql.SQL_TYPE.MYSQL:
                         if (is_prepared) {
-                            // console.log(`query:`);
-                            // console.log(query);
-                            // console.log(`params:`);
-                            // console.log(params);
                             const [res, err] = await (this._sql_connection as mysql2.Connection).execute(query as string, params)
                                 .then((res: any) => {
                                     return [ res, null ];
@@ -590,13 +587,10 @@ export class AZSql {
                                 throw err;
                             }
                             else {
-                                // console.log(`res:`);
-                                // console.log(res);
                                 // if ((res as any)[1] !== null) throw (res as any)[1] as Error;
                                 // rtn_val = this.isIdentity() ?
                                 //     ((res as Array<any>)[0] as ResultSetHeader).insertId :
                                 //     ((res as Array<any>)[0] as ResultSetHeader).affectedRows;
-                                // console.log(`type:${(res as Array<any>)[0] instanceof Array}`);
 
                                 const rows: Array<any> = (res as Array<any>)[0];
                                 if (Array.isArray(rows)) {
@@ -747,8 +741,8 @@ export class AZSql {
                         const [res, err] = await new Promise((resolve: any, _reject: any) => {
                             const stmt: sqlite3.Statement = (this._sql_connection as sqlite3.Database).prepare(query as string, (_res: any) => {
                                 if (_res === null) {
-                                    if (this.isIdentity()) {
-                                        stmt?.run(params, function (err: Error) {
+                                    if (this.isIdentity() || this.isModify()) {
+                                        stmt?.run(params, function (this: sqlite3.RunResult, err: Error) {
                                             if (err) {
                                                 resolve([null, err]);
                                             }
@@ -787,7 +781,7 @@ export class AZSql {
                             else {
                                 // rtn_val.affected = (res as sqlite3.RunResult).changes;
                                 // rtn_val.identity = (res as sqlite3.RunResult).lastID;
-                                rtn_val = this.isIdentity() ? (res as sqlite3.RunResult).lastID : (res as sqlite3.RunResult).changes;
+                                rtn_val = this.isIdentity() && !this.isModify() ? (res as sqlite3.RunResult).lastID : (res as sqlite3.RunResult).changes;
                             }
                         }
                         // }
@@ -838,15 +832,14 @@ export class AZSql {
                 throw e;
             }
             finally {
+                this.setModify(false);
                 await this.closeAsync()
                     .catch((e) => {
-                        // console.log(`finally - err:${e}`);
                         // rtn_val.err = e;
                         throw e;
                     });
             }
         }
-        // console.log(`return`);
         return rtn_val;
     }
 
@@ -1710,7 +1703,7 @@ export namespace AZSql {
             // return await (this._azsql as AZSql).executeAsync(this.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.UPDATE), this.getPreparedParameters());
             const cur_identity: boolean = (this._azsql as AZSql).isIdentity();
             (this._azsql as AZSql).setIdentity(false);
-            const rtn_val: number = await (this._azsql as AZSql).executeAsync(this.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.UPDATE), this.getPreparedParameters());
+            const rtn_val: number = await (this._azsql as AZSql).setModify(true).executeAsync(this.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.UPDATE), this.getPreparedParameters());
             (this._azsql as AZSql).setIdentity(cur_identity);
             return rtn_val;
         }
@@ -1727,7 +1720,7 @@ export namespace AZSql {
             // return await (this._azsql as AZSql).setIdentity(true).executeAsync(this.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.DELETE), this.getPreparedParameters());
             const cur_identity: boolean = (this._azsql as AZSql).isIdentity();
             (this._azsql as AZSql).setIdentity(false);
-            const rtn_val: number = await (this._azsql as AZSql).executeAsync(this.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.DELETE), this.getPreparedParameters());
+            const rtn_val: number = await (this._azsql as AZSql).setModify(true).executeAsync(this.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.DELETE), this.getPreparedParameters());
             (this._azsql as AZSql).setIdentity(cur_identity);
             return rtn_val;
         }

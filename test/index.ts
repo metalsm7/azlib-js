@@ -6,17 +6,38 @@ import * as sqlite3 from 'sqlite3';
 const test_sqlite: Function = async () => {
     const db: sqlite3.Database = new sqlite3.Database('/Users/dev/development/priv/minrepo/data/db/db.sqlite');
 
+    console.log(`===========================================`);
     let sql: AZSql.Basic = await new AZSql.Basic('maven_repo', new AZSql(db))
-        .setPrepared(true)
+        .setPrepared(false)
         .set('group_id', 'com.mparang')
         .set('artifact_id', 'azlib')
         .set('release_version', '0.1.0')
         .set('latest_version', '0.1.0')
         .set('created_at', `strftime('%s','now')`, AZSql.BQuery.VALUETYPE.QUERY);
-    console.log(`publish - addRepo.query:${sql.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.INSERT)}`);
-    console.log(`publish - addRepo.params:${sql.getPreparedParameters().toJsonString()}`);
+    console.log(`publish - query:${sql.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.INSERT)}`);
+    console.log(`publish - params:${sql.getPreparedParameters().toJsonString()}`);
     let id: number = await sql.doInsertAsync(true);
-    console.log(`publish - addRepo.id:${id}`);
+    console.log(`publish - id:${id}`);
+
+    console.log(`===========================================`);
+    sql = await new AZSql.Basic('maven_repo', new AZSql(db))
+        .setPrepared(false)
+        .set('updated_at', `strftime('%s','now')`, AZSql.BQuery.VALUETYPE.QUERY)
+        .where('repo_id', 8);
+    console.log(`publish - query:${sql.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.UPDATE)}`);
+    console.log(`publish - params:${sql.getPreparedParameters().toJsonString()}`);
+    let affected: number = await sql.doUpdateAsync();
+    console.log(`publish - affected:${affected}`);
+
+    console.log(`===========================================`);
+    sql = await new AZSql.Basic('maven_repo', new AZSql(db))
+        .setPrepared(false)
+        .where('repo_id', 8);
+    console.log(`publish - query:${sql.getQuery(AZSql.BQuery.CREATE_QUERY_TYPE.SELECT)}`);
+    console.log(`publish - params:${sql.getPreparedParameters().toJsonString()}`);
+    let res: any = await sql.doSelectAsync();
+    console.log(`publish - res:`);
+    console.log(res);
 };
 
 const test_mysql: Function = async () => {
