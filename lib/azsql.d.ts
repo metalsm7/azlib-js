@@ -17,11 +17,11 @@ export declare class AZSql {
     protected _transaction_on_commit: Function | null;
     protected _transaction_on_rollback: Function | null;
     protected _is_stored_procedure: boolean;
-    protected _sql_connection: mysql2.Connection | mysql2.Pool | sqlite3.Database | null;
-    protected _sql_pool: mysql2.Pool | null;
+    protected _sql_connection: mysql2.Connection | mysql2.Pool | mysql2.PoolCluster | sqlite3.Database | null;
+    protected _sql_pool: mysql2.Pool | mysql2.PoolCluster | null;
     protected _is_prepared: boolean;
     protected _is_modify: boolean;
-    constructor(connection_or_option: AZSql.Option | mysql2.Connection | mysql2.Pool | sqlite3.Database);
+    constructor(connection_or_option: AZSql.Option | mysql2.Connection | mysql2.Pool | mysql2.PoolCluster | sqlite3.Database);
     clear(): AZSql;
     setQuery(query: string): AZSql;
     getQuery(_preapred?: boolean): string | null;
@@ -122,7 +122,7 @@ export declare namespace AZSql {
         IS_SIGNED: string;
     };
     class Prepared extends AZSql {
-        constructor(connection_or_option: AZSql.Option | mysql2.Connection | mysql2.Pool | sqlite3.Database);
+        constructor(connection_or_option: AZSql.Option | mysql2.Connection | mysql2.Pool | mysql2.PoolCluster | sqlite3.Database);
         setPrepared(prepared: boolean): Prepared;
     }
     class BQuery {
