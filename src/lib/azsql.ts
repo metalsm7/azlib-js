@@ -25,15 +25,15 @@ export class AZSql {
 
     protected _is_stored_procedure: boolean = false;
 
-    protected _sql_connection: mysql2.Connection|mysql2.Pool|sqlite3.Database|null = null;
+    protected _sql_connection: mysql2.Connection|mysql2.Pool|mysql2.PoolCluster|sqlite3.Database|null = null;
 
-    protected _sql_pool: mysql2.Pool|null = null;
+    protected _sql_pool: mysql2.Pool|mysql2.PoolCluster|null = null;
 
     protected _is_prepared: boolean = false;
 
     protected _is_modify: boolean = false; // sqlite용
 
-    constructor(connection_or_option: AZSql.Option|mysql2.Connection|mysql2.Pool|sqlite3.Database) {
+    constructor(connection_or_option: AZSql.Option|mysql2.Connection|mysql2.Pool|mysql2.PoolCluster|sqlite3.Database) {
         if ((connection_or_option as AZSql.Option)['sql_type'] !== undefined) {
             this._option = connection_or_option as AZSql.Option;
         }
@@ -408,7 +408,13 @@ export class AZSql {
         switch (this.option?.sql_type) {
             case AZSql.SQL_TYPE.MYSQL:
                 if (typeof (this._sql_connection as any)['commit'] === 'undefined') {
-                    this._sql_pool = this._sql_connection as mysql2.Pool;
+                    if (typeof (this._sql_connection as any)['of'] === 'undefined') {
+                        this._sql_pool = this._sql_connection as mysql2.Pool;
+                    }
+                    else {
+                        this._sql_pool = this._sql_connection as mysql2.PoolCluster;
+                    }
+                    // @ts-ignore
                     this._sql_connection = await this._sql_pool.getConnection();
                 }
                 this._transaction = (this._sql_connection as mysql2.Connection).beginTransaction();
@@ -736,7 +742,7 @@ export class AZSql {
                     case AZSql.SQL_TYPE.SQLITE:
                         // if (is_prepared) {
                         // const [query, params] = this.getQueryAndParams();
-                        const [res, err] = await new Promise((resolve: any, _reject: any) => {
+                        const [res, err]: any = await new Promise((resolve: any, _reject: any) => {
                             const stmt: sqlite3.Statement = (this._sql_connection as sqlite3.Database).prepare(query as string, (_res: any) => {
                                 if (_res === null) {
                                     if (this.isIdentity() || this.isModify()) {
@@ -933,7 +939,7 @@ export namespace AZSql {
     };
 
     export class Prepared extends AZSql {
-        constructor(connection_or_option: AZSql.Option|mysql2.Connection|mysql2.Pool|sqlite3.Database) {
+        constructor(connection_or_option: AZSql.Option|mysql2.Connection|mysql2.Pool|mysql2.PoolCluster|sqlite3.Database) {
             super(connection_or_option);
             // this.setPrepared(true);
             this._is_prepared = true;
