@@ -232,7 +232,7 @@ export declare namespace AZSql {
     }
     class Basic extends AZSql.BQuery {
         private _azsql;
-        constructor(table_name: string, azsql_or_option?: AZSql | AZSql.Option, prepared?: boolean);
+        constructor(table_name: string, azsql_or_option?: AZSql | AZSql.Option | mysql2.Connection | mysql2.Pool | mysql2.PoolCluster | sqlite3.Database, prepared?: boolean);
         setPrepared(prepared: boolean): AZSql.Basic;
         clear(): AZSql.Basic;
         set(column: string | AZSql.BQuery.SetData, value?: any, value_type?: BQuery.VALUETYPE): AZSql.Basic;

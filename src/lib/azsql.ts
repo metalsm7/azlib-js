@@ -1624,14 +1624,14 @@ export namespace AZSql {
 
     export class Basic extends AZSql.BQuery {
         private _azsql: AZSql|null = null;
-        constructor(table_name: string, azsql_or_option?: AZSql|AZSql.Option, prepared?: boolean) {
+        constructor(table_name: string, azsql_or_option?: AZSql|AZSql.Option|mysql2.Connection|mysql2.Pool|mysql2.PoolCluster|sqlite3.Database, prepared?: boolean) {
             super(table_name, prepared);
             if (typeof azsql_or_option !== 'undefined') {
                 if (azsql_or_option instanceof AZSql) {
                     this._azsql = azsql_or_option as AZSql;
                 }
                 else {
-                    this._azsql = new AZSql(azsql_or_option as AZSql.Option);
+                    this._azsql = new AZSql(azsql_or_option);
                 }
             }
         }
