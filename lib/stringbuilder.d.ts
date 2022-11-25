@@ -4,6 +4,7 @@ export declare class StringBuilder {
      * @param {String|number} str
      */
     append(str: string): void;
+    clear(): void;
     /**
      * @returns {string}
      */

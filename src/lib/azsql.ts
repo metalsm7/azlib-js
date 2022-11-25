@@ -125,14 +125,26 @@ export class AZSql {
     // }
 
     getQueryAndParams(): [string|null, Array<string>|null] {
-        if (this.option?.sql_type === AZSql.SQL_TYPE.SQLITE && !this.isPrepared()) {
+        if (
+            (
+                this.option?.sql_type === AZSql.SQL_TYPE.SQLITE ||
+                this.option?.sql_type === AZSql.SQL_TYPE.MYSQL ||
+                this.option?.sql_type === AZSql.SQL_TYPE.MARIADB
+            ) && 
+            !this.isPrepared()
+        ) {
             return [this._query, []];
         }
         if (this._parameters === null) return [this._query, []];
         let query: string = this._query as string;
-        const param: Array<string> = new Array<string>();
         const keys: Array<string> = this._parameters?.getKeys();
+        //
+        if (!keys || keys.length < 1) {
+            return [this._query, []];
+        }
+        //
         const serialized_keys: string = keys.join('|');
+        const param: Array<string> = new Array<string>();
         const regex: RegExp = new RegExp(`([^@])(${serialized_keys})([\r\n\\s\\t,)]|$)`);
         while (query.search(regex) > -1) {
             const match_array: RegExpMatchArray = query.match(regex) as RegExpMatchArray;
@@ -431,7 +443,9 @@ export class AZSql {
         }
     }
 
-    async commit(): Promise<void> {
+    async commit(): Promise<Array<any>|null> {
+        const rtn_val = this.getTransactionResults();
+        //
         try {
             if (this._in_transaction) {
                 switch (this.option?.sql_type) {
@@ -449,6 +463,8 @@ export class AZSql {
             this.removeTran();
             await this.closeAsync();
         }
+        //
+        return rtn_val;
     }
 
     async rollback(): Promise<void> {

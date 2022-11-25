@@ -8,6 +8,10 @@ export class StringBuilder {
         this.values.push(str);
     }
 
+    clear() {
+        this.values.splice(0);
+    }
+
     /**
      * @returns {string}
      */
