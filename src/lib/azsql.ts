@@ -6,6 +6,10 @@ import { AZData } from './azdata';
 import { AZList } from './azlist';
 import { StringBuilder } from './stringbuilder';
 
+export interface TransactionResult {
+    
+}
+
 export class AZSql {
     protected _option: AZSql.Option = {} as AZSql.Option;
     protected _connected: boolean = false;
@@ -443,8 +447,10 @@ export class AZSql {
         }
     }
 
-    async commit(): Promise<Array<any>|null> {
+    async commit(cb?: (res: any, err: any) => any): Promise<{res: Array<any>|null, err: any}> {
         const rtn_val = this.getTransactionResults();
+        //
+        let err: any = null;
         //
         try {
             if (this._in_transaction) {
@@ -456,15 +462,18 @@ export class AZSql {
                 this._transaction_on_commit && this._transaction_on_commit();
             }
         }
-        catch (e) {
-            throw e;
+        catch (e: any) {
+            err = e;
+            // if (!cb) throw e;
         }
         finally {
             this.removeTran();
             await this.closeAsync();
         }
         //
-        return rtn_val;
+        err && cb && cb(null, err);
+        //
+        return {res: rtn_val, err};
     }
 
     async rollback(): Promise<void> {
@@ -510,11 +519,17 @@ export class AZSql {
         // const keys: Array<string> = Object.keys(res);
         // keys.length > 0 && (rtn_val = (res as any)[keys[0]]);
         // return rtn_val;
-        const res: object|null = await this.getDataAsync(query_or_id, param_or_id, return_param_or_id, is_sp);
-        if (res === null) return null;
+        // const res: object|null = await this.getDataAsync(query_or_id, param_or_id, return_param_or_id, is_sp);
+        await this.executeAsync(query_or_id, param_or_id, return_param_or_id, is_sp);
+        const res = this.hasResults() ? this.getResults() as Array<any> : new Array<any>();
+        //
+        if (res.length < 1) return null;
         let rtn_val: any = null;
-        const keys: Array<string> = Object.keys(res);
-        keys.length > 0 && (rtn_val = (res as any)[keys[0]]);
+        const keys: Array<string> = Object.keys(res[0]);
+        keys.length > 0 && (rtn_val = (res[0] as any)[keys[0]]);
+        //
+        this.inTransaction && this.addTransactionResult(rtn_val);
+        //
         return rtn_val;
     }
 
@@ -528,8 +543,16 @@ export class AZSql {
         // let rtn_val: object = {};
         // res.length > 0 && (rtn_val = res[0]);
         // return rtn_val;
-        const res: Array<any> = await this.getListAsync(query_or_id, param_or_id, return_param_or_id, is_sp);
-        return res.length > 0 ? res[0] : null;
+        //
+        // const res: Array<any> = await this.getListAsync(query_or_id, param_or_id, return_param_or_id, is_sp);
+        await this.executeAsync(query_or_id, param_or_id, return_param_or_id, is_sp);
+        const res = this.hasResults() ? this.getResults() as Array<any> : new Array<any>();
+        //
+        const rtn_val = res.length > 0 ? res[0] : null;
+        //
+        this.inTransaction && this.addTransactionResult(rtn_val);
+        //
+        return rtn_val;
     }
 
     async getListAsync(
@@ -544,7 +567,11 @@ export class AZSql {
         // typeof res.rows !== 'undefined' && (rtn_val = res.rows);
         // return rtn_val;
         await this.executeAsync(query_or_id, param_or_id, return_param_or_id, is_sp);
-        return this.hasResults() ? this.getResults() as Array<any> : new Array<any>();
+        const res = this.hasResults() ? this.getResults() as Array<any> : new Array<any>();
+        //
+        this.inTransaction && this.addTransactionResult(res);
+        //
+        return res;
     }
 
     async executeAsync(
@@ -624,7 +651,7 @@ export class AZSql {
                                     // rtn_val.rows = (res as Array<any>)[0] as Array<any>;
                                     this.setResults(rows);
                                     //
-                                    this.inTransaction && this.addTransactionResult(rows);
+                                    // this.inTransaction && this.addTransactionResult(rows);
                                 }
                                 else {
                                     /**
@@ -706,7 +733,7 @@ export class AZSql {
                                     // rtn_val.rows = (res as Array<any>)[0] as Array<any>;
                                     this.setResults(rows);
                                     //
-                                    this.inTransaction && this.addTransactionResult(rows);
+                                    // this.inTransaction && this.addTransactionResult(rows);
                                 }
                                 else {
                                     const header = ((res as Array<any>)[0] as mysql2.ResultSetHeader);

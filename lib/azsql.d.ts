@@ -2,6 +2,8 @@ import * as mysql2 from 'mysql2/promise';
 import * as sqlite3 from 'sqlite3';
 import { AZData } from './azdata';
 import { AZList } from './azlist';
+export interface TransactionResult {
+}
 export declare class AZSql {
     protected _option: AZSql.Option;
     protected _connected: boolean;
@@ -68,7 +70,10 @@ export declare class AZSql {
     openAsync(): Promise<boolean>;
     closeAsync(): Promise<void>;
     beginTran(_on_commit?: Function, _on_rollback?: Function): Promise<void>;
-    commit(): Promise<Array<any> | null>;
+    commit(cb?: (res: any, err: any) => any): Promise<{
+        res: Array<any> | null;
+        err: any;
+    }>;
     rollback(): Promise<void>;
     removeTran(): AZSql;
     getAsync(query_or_id?: string | boolean, param_or_id?: AZData | object | boolean, return_param_or_id?: AZData | object | boolean, is_sp?: boolean): Promise<any>;

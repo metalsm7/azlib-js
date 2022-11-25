@@ -151,17 +151,25 @@ b_sql = new AZSql.Basic("T_User", db_con_string);
 b_sql.Where("no", new object[] {1, 4}, AZSql.Basic.WHERETYPE.BETWEEN);
 b_sql.DoDelete();
 ```
-```c#
+```ts
 // Transaction 사용법
-AZSql sql = new AZSql(db_con_string);
-sql.BeginTran(
-    (ex_on_commit) => Console.WriteLine("Commit 또는 쿼리 처리시 발생된 예외 : " + ex_on_commit.ToString()), 
-    (ex_on_rollback) => Console.WriteLine("Rollback 처리시 발생된 예외 : " + ex_on_rollback.ToString())
+const sql = new AZSql(db_con_string);
+await sql.beginTran(
+    (on_commit) => {}, 
+    (on_rollback) => {}
 );
 // 순차적으로 쿼리를 처리해 가다가 예외 발생시 자동으로 Rollback 처리 하게 됩니다.
-sql.GetData("SELECT name, no FROM T_User with (nolock) WHERE no=1");
-sql.Execute("UPDATE T_User SET name='user1' WHERE no=1");[]
-sql.Execute("DELETE T_User WHERE no=1");
+await sql.getDataAsync("SELECT name, no FROM T_User with (nolock) WHERE no=1");
+await sql.executeAsync("UPDATE T_User SET name='user1' WHERE no=1");
+await sql.executeAsync("DELETE T_User WHERE no=1");
 // 처리 중 발생된 반환값들을 AZData 형식으로 반환 처리 합니다.
-AZData result = sql.Commit();
+const {res, err} = const sql.commit((res: any[]|null, err: any) => {
+    if (err) {
+        // 에러 처리
+    }
+});
+//
+if (err) {
+    // 에러 처리
+}
 ```
