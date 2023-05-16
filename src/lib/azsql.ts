@@ -1,4 +1,5 @@
 import { EOL } from 'os';
+import * as mysql2plain from 'mysql2';
 import * as mysql2 from 'mysql2/promise';
 import * as sqlite3 from 'sqlite3';
 // import { AZMap } from './azmap';
@@ -29,15 +30,15 @@ export class AZSql {
 
     protected _is_stored_procedure: boolean = false;
 
-    protected _sql_connection: mysql2.Connection|mysql2.Pool|mysql2.PoolCluster|sqlite3.Database|null = null;
+    protected _sql_connection: mysql2.Connection|mysql2.Pool|mysql2plain.PoolConnection|mysql2plain.PoolCluster|sqlite3.Database|null = null;
 
-    protected _sql_pool: mysql2.Pool|mysql2.PoolCluster|null = null;
+    protected _sql_pool: mysql2.Pool|mysql2plain.PoolCluster|null = null;
 
     protected _is_prepared: boolean = false;
 
     protected _is_modify: boolean = false; // sqlite용
 
-    constructor(connection_or_option: AZSql.Option|mysql2.Connection|mysql2.Pool|mysql2.PoolCluster|sqlite3.Database) {
+    constructor(connection_or_option: AZSql.Option|mysql2.Connection|mysql2.Pool|mysql2plain.PoolConnection|mysql2plain.PoolCluster|sqlite3.Database) {
         if ((connection_or_option as AZSql.Option)['sql_type'] !== undefined) {
             this._option = connection_or_option as AZSql.Option;
         }
@@ -424,14 +425,20 @@ export class AZSql {
         switch (this.option?.sql_type) {
             case AZSql.SQL_TYPE.MYSQL:
                 if (typeof (this._sql_connection as any)['commit'] === 'undefined') {
-                    if (typeof (this._sql_connection as any)['of'] === 'undefined') {
+                    if (typeof (this._sql_connection as any)['_cluster'] === 'undefined') {
+                    // if (typeof (this._sql_connection as any)['of'] === 'undefined') {
                         this._sql_pool = this._sql_connection as mysql2.Pool;
+                        this._sql_connection = await this._sql_pool.getConnection();
                     }
                     else {
-                        this._sql_pool = this._sql_connection as mysql2.PoolCluster;
+                        this._sql_pool = this._sql_connection as mysql2plain.PoolCluster;
+                        this._sql_connection = await new Promise((resolve) => {
+                            this._sql_pool?.getConnection((err, conn) => {
+                                if (err) throw err;
+                                resolve(conn);
+                            });
+                        });
                     }
-                    // @ts-ignore
-                    this._sql_connection = await this._sql_pool.getConnection();
                 }
                 this._transaction = (this._sql_connection as mysql2.Connection).beginTransaction();
                 this._transaction
@@ -621,14 +628,51 @@ export class AZSql {
                 switch (this.option?.sql_type) {
                     case AZSql.SQL_TYPE.MYSQL:
                         if (is_prepared) {
-                            const [res, err] = await (this._sql_connection as mysql2.Connection).execute(query as string, params)
+                            // let rows: Array<any>|any|null = null;
+                            let res: any = null;
+                            let err: Error|null = null;
+                            if (typeof (this._sql_connection as any)['_cluster'] === 'undefined') {
+                                this._sql_pool = this._sql_connection as mysql2.Pool;
+                                this._sql_connection = await this._sql_pool.getConnection();
+                                //
+                                [res, err] = await (this._sql_connection as mysql2.Connection).execute(query as string, params)
+                                    .then((result: any) => {
+                                        return [ result, null ];
+                                    })
+                                    .catch(async (err: Error) => {
+                                        this.inTransaction && await this.rollback();
+                                        return [ null, err ];
+                                    });
+                            }
+                            else {
+                                this._sql_pool = this._sql_connection as mysql2plain.PoolCluster;
+                                this._sql_connection = await new Promise((resolve) => {
+                                    this._sql_pool?.getConnection((err, conn) => {
+                                        if (err) throw err;
+                                        resolve(conn);
+                                    });
+                                });
+                                //
+                                [res, err] = await new Promise((resolve) => {
+                                    (this._sql_connection as mysql2plain.PoolConnection).execute(query as string, params, async (err, result) => {
+                                        if (err) {
+                                            this.inTransaction && await this.rollback();
+                                            resolve([null, err]);
+                                        }
+                                        resolve([[result, []], null]);
+                                    });
+                                });
+                                // console.log(`az.cluster.res`, res);
+                                
+                            }
+                            /*const [res, err] = await (this._sql_connection as mysql2.Connection).execute(query as string, params)
                                 .then((res: any) => {
                                     return [ res, null ];
                                 })
                                 .catch(async (err: Error) => {
                                     this.inTransaction && await this.rollback();
                                     return [ null, err ];
-                                });
+                                });*/
                             if (err) {
                                 // rtn_val.err = err;
                                 throw err;
@@ -713,14 +757,52 @@ export class AZSql {
                             }
                         }
                         else {
-                            const [res, err] = await (this._sql_connection as mysql2.Connection).query(query as string, params)
-                                .then((res: any) => {
-                                    return [ res, null ];
-                                })
-                                .catch(async (err: Error) => {
-                                    this.inTransaction && await this.rollback();
-                                    return [ null, err ];
+                            let res: any = null;
+                            let err: Error|null = null;
+
+                            if (typeof (this._sql_connection as any)['_cluster'] === 'undefined') {
+                                this._sql_pool = this._sql_connection as mysql2.Pool;
+                                this._sql_connection = await this._sql_pool.getConnection();
+                                //
+                                [res, err] = await (this._sql_connection as mysql2.Connection).query(query as string, params)
+                                    .then((result: any) => {
+                                        return [ result, null ];
+                                    })
+                                    .catch(async (err: Error) => {
+                                        this.inTransaction && await this.rollback();
+                                        return [ null, err ];
+                                    });
+                            }
+                            else {
+                                this._sql_pool = this._sql_connection as mysql2plain.PoolCluster;
+                                this._sql_connection = await new Promise((resolve) => {
+                                    this._sql_pool?.getConnection((err, conn) => {
+                                        if (err) throw err;
+                                        resolve(conn);
+                                    });
                                 });
+                                //
+                                [res, err] = await new Promise((resolve) => {
+                                    (this._sql_connection as mysql2plain.PoolConnection).query(query as string, params, async (err, result) => {
+                                        // console.log(`az.cluster.result`, result);\
+                                        if (err) {
+                                            this.inTransaction && await this.rollback();
+                                            resolve([null, err]);
+                                        }
+                                        resolve([[result, []], null]);
+                                    });
+                                });
+                                // console.log(`az.cluster.res`, res);
+                                
+                            }
+                            // const [res, err] = await (this._sql_connection as mysql2.Connection).query(query as string, params)
+                            //     .then((res: any) => {
+                            //         return [ res, null ];
+                            //     })
+                            //     .catch(async (err: Error) => {
+                            //         this.inTransaction && await this.rollback();
+                            //         return [ null, err ];
+                            //     });
                             if (err) {
                                 // rtn_val.err = err;
                                 throw err;
@@ -982,7 +1064,7 @@ export namespace AZSql {
     };
 
     export class Prepared extends AZSql {
-        constructor(connection_or_option: AZSql.Option|mysql2.Connection|mysql2.Pool|mysql2.PoolCluster|sqlite3.Database) {
+        constructor(connection_or_option: AZSql.Option|mysql2.Connection|mysql2.Pool|mysql2plain.PoolConnection|mysql2plain.PoolCluster|sqlite3.Database) {
             super(connection_or_option);
             // this.setPrepared(true);
             this._is_prepared = true;
@@ -1667,7 +1749,7 @@ export namespace AZSql {
 
     export class Basic extends AZSql.BQuery {
         private _azsql: AZSql|null = null;
-        constructor(table_name: string, azsql_or_option?: AZSql|AZSql.Option|mysql2.Connection|mysql2.Pool|mysql2.PoolCluster|sqlite3.Database, prepared?: boolean) {
+        constructor(table_name: string, azsql_or_option?: AZSql|AZSql.Option|mysql2.Connection|mysql2.Pool|mysql2.PoolConnection|mysql2plain.PoolCluster|sqlite3.Database, prepared?: boolean) {
             super(table_name, prepared);
             if (typeof azsql_or_option !== 'undefined') {
                 if (azsql_or_option instanceof AZSql) {

@@ -1,3 +1,4 @@
+import * as mysql2plain from 'mysql2';
 import * as mysql2 from 'mysql2/promise';
 import * as sqlite3 from 'sqlite3';
 import { AZData } from './azdata';
@@ -19,11 +20,11 @@ export declare class AZSql {
     protected _transaction_on_commit: Function | null;
     protected _transaction_on_rollback: Function | null;
     protected _is_stored_procedure: boolean;
-    protected _sql_connection: mysql2.Connection | mysql2.Pool | mysql2.PoolCluster | sqlite3.Database | null;
-    protected _sql_pool: mysql2.Pool | mysql2.PoolCluster | null;
+    protected _sql_connection: mysql2.Connection | mysql2.Pool | mysql2plain.PoolConnection | mysql2plain.PoolCluster | sqlite3.Database | null;
+    protected _sql_pool: mysql2.Pool | mysql2plain.PoolCluster | null;
     protected _is_prepared: boolean;
     protected _is_modify: boolean;
-    constructor(connection_or_option: AZSql.Option | mysql2.Connection | mysql2.Pool | mysql2.PoolCluster | sqlite3.Database);
+    constructor(connection_or_option: AZSql.Option | mysql2.Connection | mysql2.Pool | mysql2plain.PoolConnection | mysql2plain.PoolCluster | sqlite3.Database);
     clear(): AZSql;
     setQuery(query: string): AZSql;
     getQuery(_preapred?: boolean): string | null;
@@ -127,7 +128,7 @@ export declare namespace AZSql {
         IS_SIGNED: string;
     };
     class Prepared extends AZSql {
-        constructor(connection_or_option: AZSql.Option | mysql2.Connection | mysql2.Pool | mysql2.PoolCluster | sqlite3.Database);
+        constructor(connection_or_option: AZSql.Option | mysql2.Connection | mysql2.Pool | mysql2plain.PoolConnection | mysql2plain.PoolCluster | sqlite3.Database);
         setPrepared(prepared: boolean): Prepared;
     }
     class BQuery {
@@ -237,7 +238,7 @@ export declare namespace AZSql {
     }
     class Basic extends AZSql.BQuery {
         private _azsql;
-        constructor(table_name: string, azsql_or_option?: AZSql | AZSql.Option | mysql2.Connection | mysql2.Pool | mysql2.PoolCluster | sqlite3.Database, prepared?: boolean);
+        constructor(table_name: string, azsql_or_option?: AZSql | AZSql.Option | mysql2.Connection | mysql2.Pool | mysql2.PoolConnection | mysql2plain.PoolCluster | sqlite3.Database, prepared?: boolean);
         setPrepared(prepared: boolean): AZSql.Basic;
         clear(): AZSql.Basic;
         set(column: string | AZSql.BQuery.SetData, value?: any, value_type?: BQuery.VALUETYPE): AZSql.Basic;
