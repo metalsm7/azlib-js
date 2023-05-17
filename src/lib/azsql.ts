@@ -402,7 +402,7 @@ export class AZSql {
         if (this.inTransaction || !this._open_self) return;
         switch (this._option?.sql_type) {
             case AZSql.SQL_TYPE.MYSQL:
-                await (this._sql_connection as mysql2.Connection).end();
+                await (this._sql_connection as mysql2.PoolConnection).release();
                 break;
             case AZSql.SQL_TYPE.SQLITE:
                 await new Promise((resolve: any, reject: any) => {
@@ -429,12 +429,14 @@ export class AZSql {
                     // if (typeof (this._sql_connection as any)['of'] === 'undefined') {
                         this._sql_pool = this._sql_connection as mysql2.Pool;
                         this._sql_connection = await this._sql_pool.getConnection();
+                        this._open_self = true;
                     }
                     else {
                         this._sql_pool = this._sql_connection as mysql2plain.PoolCluster;
                         this._sql_connection = await new Promise((resolve) => {
                             this._sql_pool?.getConnection((err, conn) => {
                                 if (err) throw err;
+                                this._open_self = true;
                                 resolve(conn);
                             });
                         });
@@ -634,6 +636,7 @@ export class AZSql {
                             if (typeof (this._sql_connection as any)['_cluster'] === 'undefined') {
                                 this._sql_pool = this._sql_connection as mysql2.Pool;
                                 this._sql_connection = await this._sql_pool.getConnection();
+                                this._open_self = true;
                                 //
                                 [res, err] = await (this._sql_connection as mysql2.Connection).execute(query as string, params)
                                     .then((result: any) => {
@@ -649,6 +652,7 @@ export class AZSql {
                                 this._sql_connection = await new Promise((resolve) => {
                                     this._sql_pool?.getConnection((err, conn) => {
                                         if (err) throw err;
+                                        this._open_self = true;
                                         resolve(conn);
                                     });
                                 });
@@ -763,6 +767,7 @@ export class AZSql {
                             if (typeof (this._sql_connection as any)['_cluster'] === 'undefined') {
                                 this._sql_pool = this._sql_connection as mysql2.Pool;
                                 this._sql_connection = await this._sql_pool.getConnection();
+                                this._open_self = true;
                                 //
                                 [res, err] = await (this._sql_connection as mysql2.Connection).query(query as string, params)
                                     .then((result: any) => {
@@ -778,6 +783,7 @@ export class AZSql {
                                 this._sql_connection = await new Promise((resolve) => {
                                     this._sql_pool?.getConnection((err, conn) => {
                                         if (err) throw err;
+                                        this._open_self = true;
                                         resolve(conn);
                                     });
                                 });
