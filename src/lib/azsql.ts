@@ -18,7 +18,7 @@ export class AZSql {
     
     protected _query: string|null = null;
     protected _parameters: AZData|null = null;
-    protected _return_parameters: AZData|null = null;
+    protected _return_parameters: AZData|object|null = null;
     protected _results: Array<any>|null = null;
     protected _identity: boolean = false;
 
@@ -176,10 +176,20 @@ export class AZSql {
         if (!this.hasReturnParameters()) return null;
         const rtn_val: StringBuilder = new StringBuilder();
         rtn_val.append(`SELECT`);
-        for (let cnti: number = 0; cnti < (this._return_parameters?.size()?? 0); cnti++) {
-            rtn_val.append(' ');
-            cnti > 0 && rtn_val.append(',');
-            rtn_val.append(`${this._return_parameters?.getKey(cnti)}`);
+        if (this._return_parameters instanceof AZData) {
+            for (let cnti: number = 0; cnti < (this._return_parameters?.size()?? 0); cnti++) {
+                rtn_val.append(' ');
+                cnti > 0 && rtn_val.append(',');
+                rtn_val.append(`${this._return_parameters?.getKey(cnti)}`);
+            }
+        }
+        else {
+            const keys = Object.keys(this._return_parameters!);
+            for (let cnti: number = 0; cnti < keys.length; cnti++) {
+                rtn_val.append(' ');
+                cnti > 0 && rtn_val.append(',');
+                rtn_val.append(`${keys[cnti]}`);
+            }
         }
         return rtn_val.toString();
     }
@@ -239,52 +249,72 @@ export class AZSql {
     }
     
     setReturnParameters(parameters: AZData|object): AZSql {
-        if (this._return_parameters === null) {
-            this._return_parameters = new AZData();
-        }
-        else { 
-            this._return_parameters.clear();
+        // if (this._return_parameters === null) {
+        //     this._return_parameters = new AZData();
+        // }
+        // else { 
+        //     this._return_parameters.clear();
+        // }
+        if (this._return_parameters instanceof AZData) {
+            this._return_parameters?.clear();
         }
         
-        if (parameters instanceof AZData) {
-            this._return_parameters = parameters;
-        }
-        else {
-            const keys: Array<string> = Object.keys(parameters);
-            for (let cnti: number = 0; cnti < keys.length; cnti++) {
-                const key: string = keys[cnti];
-                const val: any = (parameters as any)[key];
-                this.addReturnParameter(key, val);
-            }
-        }
+        // if (parameters instanceof AZData) {
+        //     this._return_parameters = parameters;
+        // }
+        // else {
+        //     const keys: Array<string> = Object.keys(parameters);
+        //     for (let cnti: number = 0; cnti < keys.length; cnti++) {
+        //         const key: string = keys[cnti];
+        //         const val: any = (parameters as any)[key];
+        //         this.addReturnParameter(key, val);
+        //     }
+        // }
+        this._return_parameters = parameters;
         return this;
     }
 
-    getReturnParamters(): AZData|null {
+    getReturnParamters(): AZData|object|null {
         return this._return_parameters;
     }
 
     getReturnParamter<Type>(key: string): Type {
-        return this._return_parameters?.get(key) as Type;
+        if (this._return_parameters instanceof AZData) {
+            return this._return_parameters?.get(key) as Type;
+        }
+        else {
+            return (this._return_parameters as any)[key] as Type;
+        }
     }
 
     addReturnParameter(key: string, value: any): AZSql {
-        this._return_parameters?.add(key, value);
+        if (this._return_parameters instanceof AZData) {
+            this._return_parameters?.add(key, value);
+        }
         return this;
     }
 
     addReturnParamters(paramters: AZData): AZSql {
-        this._return_parameters?.add(paramters);
+        if (this._return_parameters instanceof AZData) {
+            this._return_parameters?.add(paramters);
+        }
         return this;
     }
 
     updateReturnParamter(key: string|number, value: any): AZSql {
-        this._return_parameters?.set(key, value);
+        if (this._return_parameters instanceof AZData) {
+            this._return_parameters?.set(key, value);
+        }
+        else {
+            (this._return_parameters as any)[key] = value;
+        }
         return this;
     }
 
     clearReturnParameters(): AZSql {
-        this._return_parameters?.clear();
+        if (this._return_parameters instanceof AZData) {
+            this._return_parameters?.clear();
+        }
         return this;
     }
 
@@ -294,7 +324,11 @@ export class AZSql {
     }
 
     hasReturnParameters(): boolean {
-        return this._return_parameters !== null && this._return_parameters instanceof AZData && this._return_parameters.size() > 0;
+        return this._return_parameters !== null && 
+            (
+                (this._return_parameters instanceof AZData && this._return_parameters.size() > 0) ||
+                (typeof this._return_parameters === 'object' && Object.keys(this._return_parameters).length > 0)
+            );
     }
 
     protected setResults(rows: Array<any>): AZSql {
@@ -633,7 +667,10 @@ export class AZSql {
                             // let rows: Array<any>|any|null = null;
                             let res: any = null;
                             let err: Error|null = null;
-                            if (typeof (this._sql_connection as any)['_cluster'] === 'undefined') {
+                            //
+                            const is_cluster = typeof (this._sql_connection as any)['_cluster'] !== 'undefined';
+                            //
+                            if (!is_cluster) {
                                 this._sql_pool = this._sql_connection as mysql2.Pool;
                                 this._sql_connection = await this._sql_pool.getConnection();
                                 this._open_self = true;
@@ -727,14 +764,39 @@ export class AZSql {
                                 if (this.isStoredProcedure()) {
                                     const return_query: string|null = this.getReturnQuery();
                                     if (return_query !== null) {
-                                        const [r_res, r_err] = await (this._sql_connection as mysql2.Connection).execute(return_query as string)
-                                            .then((res: any) => {
-                                                return [ res, null ];
-                                            })
-                                            .catch(async (err: Error) => {
-                                                this.inTransaction && await this.rollback();
-                                                return [ null, err ];
+                                        // const [r_res, r_err] = await (this._sql_connection as mysql2.Connection).execute(return_query as string)
+                                        //     .then((res: any) => {
+                                        //         return [ res, null ];
+                                        //     })
+                                        //     .catch(async (err: Error) => {
+                                        //         this.inTransaction && await this.rollback();
+                                        //         return [ null, err ];
+                                        //     });
+                                        //
+                                        let r_res: any = null;
+                                        let r_err: Error|null = null;
+                                        if (!is_cluster) {
+                                            [r_res, r_err] = await (this._sql_connection as mysql2.Connection).query(return_query as string)
+                                                .then((result: any) => {
+                                                    return [ result, null ];
+                                                })
+                                                .catch(async (err: Error) => {
+                                                    this.inTransaction && await this.rollback();
+                                                    return [ null, err ];
+                                                });
+                                        }
+                                        else {
+                                            [r_res, r_err] = await new Promise((resolve) => {
+                                                (this._sql_connection as mysql2plain.PoolConnection).query(return_query as string, async (err, result) => {
+                                                    // console.log(`az.cluster.result`, result);\
+                                                    if (err) {
+                                                        this.inTransaction && await this.rollback();
+                                                        resolve([null, err]);
+                                                    }
+                                                    resolve([[result, []], null]);
+                                                });
                                             });
+                                        }
                                         if (r_err) {
                                             // rtn_val.err = err;
                                             throw r_err;
@@ -763,8 +825,10 @@ export class AZSql {
                         else {
                             let res: any = null;
                             let err: Error|null = null;
-
-                            if (typeof (this._sql_connection as any)['_cluster'] === 'undefined') {
+                            //
+                            const is_cluster = typeof (this._sql_connection as any)['_cluster'] !== 'undefined';
+                            //
+                            if (!is_cluster) {
                                 this._sql_pool = this._sql_connection as mysql2.Pool;
                                 this._sql_connection = await this._sql_pool.getConnection();
                                 this._open_self = true;
@@ -837,14 +901,40 @@ export class AZSql {
                             if (this.isStoredProcedure()) {
                                 const return_query: string|null = this.getReturnQuery();
                                 if (return_query !== null) {
-                                    const [r_res, r_err] = await (this._sql_connection as mysql2.Connection).execute(return_query as string)
-                                        .then((res: any) => {
-                                            return [ res, null ];
-                                        })
-                                        .catch(async (err: Error) => {
-                                            this.inTransaction && await this.rollback();
-                                            return [ null, err ];
+                                    // const [r_res, r_err] = await (this._sql_connection as mysql2.Connection).execute(return_query as string)
+                                    //     .then((res: any) => {
+                                    //         return [ res, null ];
+                                    //     })
+                                    //     .catch(async (err: Error) => {
+                                    //         this.inTransaction && await this.rollback();
+                                    //         return [ null, err ];
+                                    //     });
+                                    //
+                                    let r_res: any = null;
+                                    let r_err: Error|null = null;
+                                    if (!is_cluster) {
+                                        [r_res, r_err] = await (this._sql_connection as mysql2.Connection).query(return_query as string)
+                                            .then((result: any) => {
+                                                return [ result, null ];
+                                            })
+                                            .catch(async (err: Error) => {
+                                                this.inTransaction && await this.rollback();
+                                                return [ null, err ];
+                                            });
+                                    }
+                                    else {
+                                        [r_res, r_err] = await new Promise((resolve) => {
+                                            (this._sql_connection as mysql2plain.PoolConnection).query(return_query as string, async (err, result) => {
+                                                // console.log(`az.cluster.result`, result);\
+                                                if (err) {
+                                                    this.inTransaction && await this.rollback();
+                                                    resolve([null, err]);
+                                                }
+                                                resolve([[result, []], null]);
+                                            });
                                         });
+                                    }
+                                    //
                                     if (r_err) {
                                         // rtn_val.err = err;
                                         throw r_err;

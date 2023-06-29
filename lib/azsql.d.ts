@@ -11,7 +11,7 @@ export declare class AZSql {
     protected _open_self: boolean;
     protected _query: string | null;
     protected _parameters: AZData | null;
-    protected _return_parameters: AZData | null;
+    protected _return_parameters: AZData | object | null;
     protected _results: Array<any> | null;
     protected _identity: boolean;
     protected _in_transaction: boolean;
@@ -44,7 +44,7 @@ export declare class AZSql {
     removeParamters(): AZSql;
     hasParameters(): boolean;
     setReturnParameters(parameters: AZData | object): AZSql;
-    getReturnParamters(): AZData | null;
+    getReturnParamters(): AZData | object | null;
     getReturnParamter<Type>(key: string): Type;
     addReturnParameter(key: string, value: any): AZSql;
     addReturnParamters(paramters: AZData): AZSql;
