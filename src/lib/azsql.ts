@@ -30,15 +30,15 @@ export class AZSql {
 
     protected _is_stored_procedure: boolean = false;
 
-    protected _sql_connection: mysql2.Connection|mysql2.Pool|mysql2plain.PoolConnection|mysql2plain.PoolCluster|mysql2plain.PoolNamespace|sqlite3.Database|null = null;
+    protected _sql_connection: mysql2.Connection|mysql2.Pool|mysql2plain.PoolConnection|mysql2.PoolConnection|mysql2plain.PoolCluster|mysql2.PoolCluster|mysql2plain.PoolNamespace|mysql2.PoolNamespace|sqlite3.Database|null = null;
 
-    protected _sql_pool: mysql2.Pool|mysql2plain.PoolCluster|mysql2plain.PoolNamespace|null = null;
+    protected _sql_pool: mysql2.Pool|mysql2plain.PoolCluster|mysql2.PoolCluster|mysql2plain.PoolNamespace|mysql2.PoolNamespace|null = null;
 
     protected _is_prepared: boolean = false;
 
     protected _is_modify: boolean = false; // sqlite용
 
-    constructor(connection_or_option: AZSql.Option|mysql2.Connection|mysql2.Pool|mysql2plain.PoolConnection|mysql2plain.PoolCluster|mysql2plain.PoolNamespace|sqlite3.Database) {
+    constructor(connection_or_option: AZSql.Option|mysql2.Connection|mysql2.Pool|mysql2plain.PoolConnection|mysql2.PoolConnection|mysql2plain.PoolCluster|mysql2.PoolCluster|mysql2plain.PoolNamespace|mysql2.PoolNamespace|sqlite3.Database) {
         if ((connection_or_option as AZSql.Option)['sql_type'] !== undefined) {
             this._option = connection_or_option as AZSql.Option;
         }
@@ -685,7 +685,8 @@ export class AZSql {
                                     });
                             }
                             else {
-                                this._sql_pool = this._sql_connection as mysql2plain.PoolCluster;
+                                // this._sql_pool = this._sql_connection as mysql2plain.PoolCluster;
+                                this._sql_pool = this._sql_connection as mysql2.PoolCluster;
                                 this._sql_connection = await new Promise((resolve) => {
                                     this._sql_pool?.getConnection((err, conn) => {
                                         if (err) throw err;
@@ -1160,7 +1161,7 @@ export namespace AZSql {
     };
 
     export class Prepared extends AZSql {
-        constructor(connection_or_option: AZSql.Option|mysql2.Connection|mysql2.Pool|mysql2plain.PoolConnection|mysql2plain.PoolCluster|sqlite3.Database) {
+        constructor(connection_or_option: AZSql.Option|mysql2.Connection|mysql2.Pool|mysql2plain.PoolConnection|mysql2.PoolConnection|mysql2plain.PoolCluster|mysql2.PoolCluster|mysql2plain.PoolNamespace|mysql2.PoolNamespace|sqlite3.Database) {
             super(connection_or_option);
             // this.setPrepared(true);
             this._is_prepared = true;
@@ -1845,7 +1846,7 @@ export namespace AZSql {
 
     export class Basic extends AZSql.BQuery {
         private _azsql: AZSql|null = null;
-        constructor(table_name: string, azsql_or_option?: AZSql|AZSql.Option|mysql2.Connection|mysql2.Pool|mysql2.PoolConnection|mysql2plain.PoolCluster|sqlite3.Database, prepared?: boolean) {
+        constructor(table_name: string, azsql_or_option?: AZSql|AZSql.Option|mysql2.Connection|mysql2.Pool|mysql2plain.PoolConnection|mysql2.PoolConnection|mysql2plain.PoolCluster|mysql2.PoolCluster|mysql2plain.PoolNamespace|mysql2.PoolNamespace|sqlite3.Database, prepared?: boolean) {
             super(table_name, prepared);
             if (typeof azsql_or_option !== 'undefined') {
                 if (azsql_or_option instanceof AZSql) {
