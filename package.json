@@ -1,6 +1,6 @@
 {
   "name": "azlib",
-  "version": "0.0.32",
+  "version": "0.0.33",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -20,6 +20,7 @@
   },
   "homepage": "https://github.com/metalsm7/azlib-js#readme",
   "dependencies": {
+    "mariadb": "^3.4.4",
     "mysql2": "^3.12.0",
     "sqlite3": "^5.1.7"
   },

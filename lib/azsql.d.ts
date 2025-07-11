@@ -1,3 +1,4 @@
+import * as mariadb from 'mariadb';
 import * as mysql2plain from 'mysql2';
 import * as mysql2 from 'mysql2/promise';
 import * as sqlite3 from 'sqlite3';
@@ -9,28 +10,32 @@ export declare class AZSql {
     protected _option: AZSql.Option;
     protected _connected: boolean;
     protected _open_self: boolean;
+    protected _instance_name: 'PoolPromise' | 'Cluster' | 'PromisePool' | 'PromisePoolCluster' | null;
     protected _query: string | null;
     protected _parameters: AZData | null;
     protected _return_parameters: AZData | object | null;
     protected _results: Array<any> | null;
     protected _identity: boolean;
     protected _in_transaction: boolean;
-    protected _transaction: any;
     protected _transaction_result: Array<any> | null;
     protected _transaction_on_commit: Function | null;
     protected _transaction_on_rollback: Function | null;
     protected _is_stored_procedure: boolean;
-    protected _sql_connection: mysql2.Connection | mysql2.Pool | mysql2plain.PoolConnection | mysql2.PoolConnection | mysql2plain.PoolCluster | mysql2.PoolCluster | mysql2plain.PoolNamespace | mysql2.PoolNamespace | sqlite3.Database | null;
+    protected _sql_connection: mysql2.Connection | mysql2.Pool | mysql2plain.PoolConnection | mysql2.PoolConnection | mysql2plain.PoolCluster | mysql2.PoolCluster | mysql2plain.PoolNamespace | mysql2.PoolNamespace | sqlite3.Database | mariadb.Connection | mariadb.PoolConnection | null;
     protected _sql_pool: mysql2.Pool | mysql2plain.PoolCluster | mysql2.PoolCluster | mysql2plain.PoolNamespace | mysql2.PoolNamespace | null;
+    protected _sql_pool_mariadb: mariadb.Pool | mariadb.PoolCluster | null;
     protected _is_prepared: boolean;
     protected _is_modify: boolean;
-    constructor(connection_or_option: AZSql.Option | mysql2.Connection | mysql2.Pool | mysql2plain.PoolConnection | mysql2.PoolConnection | mysql2plain.PoolCluster | mysql2.PoolCluster | mysql2plain.PoolNamespace | mysql2.PoolNamespace | sqlite3.Database);
+    protected _is_debug: boolean;
+    constructor(connection_or_option: AZSql.Option | mysql2.Connection | mysql2.Pool | mysql2plain.PoolConnection | mysql2.PoolConnection | mysql2plain.PoolCluster | mysql2.PoolCluster | mysql2plain.PoolNamespace | mysql2.PoolNamespace | sqlite3.Database | mariadb.Pool | mariadb.PoolCluster, is_debug?: boolean);
     clear(): AZSql;
     setQuery(query: string): AZSql;
     getQuery(_preapred?: boolean): string | null;
     clearQuery(): AZSql;
     setModify(modify: boolean): AZSql;
     isModify(): boolean;
+    setDebug(debug: boolean): AZSql;
+    isDebug(): boolean;
     setPrepared(prepared: boolean): AZSql;
     isPrepared(): boolean;
     getQueryAndParams(): [string | null, Array<string> | null];
@@ -84,6 +89,7 @@ export declare class AZSql {
     get connected(): boolean;
     get inTransaction(): boolean;
     get option(): AZSql.Option | null;
+    get instanceName(): 'PoolPromise' | 'Cluster' | 'PromisePool' | 'PromisePoolCluster' | null;
 }
 export declare namespace AZSql {
     interface Option {

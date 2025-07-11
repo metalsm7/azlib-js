@@ -1,4 +1,5 @@
 import { EOL } from 'os';
+import * as mariadb from 'mariadb';
 import * as mysql2plain from 'mysql2';
 import * as mysql2 from 'mysql2/promise';
 import * as sqlite3 from 'sqlite3';
@@ -15,6 +16,9 @@ export class AZSql {
     protected _option: AZSql.Option = {} as AZSql.Option;
     protected _connected: boolean = false;
     protected _open_self: boolean = false;
+
+    // PoolPromise, Cluster -> mariadb / PromisePool, PromisePoolCluster -> mysql
+    protected _instance_name: 'PoolPromise'|'Cluster'|'PromisePool'|'PromisePoolCluster'|null = null;
     
     protected _query: string|null = null;
     protected _parameters: AZData|null = null;
@@ -23,40 +27,66 @@ export class AZSql {
     protected _identity: boolean = false;
 
     protected _in_transaction: boolean = false;
-    protected _transaction: any = null;
+    // protected _transaction: any = null;
     protected _transaction_result: Array<any>|null = null;
     protected _transaction_on_commit: Function|null = null;
     protected _transaction_on_rollback: Function|null = null;
 
     protected _is_stored_procedure: boolean = false;
 
-    protected _sql_connection: mysql2.Connection|mysql2.Pool|mysql2plain.PoolConnection|mysql2.PoolConnection|mysql2plain.PoolCluster|mysql2.PoolCluster|mysql2plain.PoolNamespace|mysql2.PoolNamespace|sqlite3.Database|null = null;
+    protected _sql_connection: mysql2.Connection|mysql2.Pool|mysql2plain.PoolConnection|mysql2.PoolConnection|mysql2plain.PoolCluster|mysql2.PoolCluster|mysql2plain.PoolNamespace|mysql2.PoolNamespace|sqlite3.Database|mariadb.Connection|mariadb.PoolConnection|null = null;
 
     protected _sql_pool: mysql2.Pool|mysql2plain.PoolCluster|mysql2.PoolCluster|mysql2plain.PoolNamespace|mysql2.PoolNamespace|null = null;
+    protected _sql_pool_mariadb: mariadb.Pool|mariadb.PoolCluster|null = null;
 
     protected _is_prepared: boolean = false;
 
     protected _is_modify: boolean = false; // sqlite용
 
-    constructor(connection_or_option: AZSql.Option|mysql2.Connection|mysql2.Pool|mysql2plain.PoolConnection|mysql2.PoolConnection|mysql2plain.PoolCluster|mysql2.PoolCluster|mysql2plain.PoolNamespace|mysql2.PoolNamespace|sqlite3.Database) {
+    protected _is_debug: boolean = false; // 디버깅용
+
+    constructor(connection_or_option: AZSql.Option|mysql2.Connection|mysql2.Pool|mysql2plain.PoolConnection|mysql2.PoolConnection|mysql2plain.PoolCluster|mysql2.PoolCluster|mysql2plain.PoolNamespace|mysql2.PoolNamespace|sqlite3.Database|mariadb.Pool|mariadb.PoolCluster, is_debug: boolean = false) {
+        //
+        this._is_debug = is_debug;
+        //
         if ((connection_or_option as AZSql.Option)['sql_type'] !== undefined) {
             this._option = connection_or_option as AZSql.Option;
         }
         else {
+            // if (this.isDebug() === true) console.log(`AZSql.constructor - connection_or_option`, (connection_or_option as any)?.pool ?? null);
             if (connection_or_option instanceof sqlite3.Database) {
                 this._sql_connection = connection_or_option as sqlite3.Database;
                 this._connected = true;
                 this._option.sql_type = AZSql.SQL_TYPE.SQLITE;
             }
             else {
-                this._sql_connection = connection_or_option as mysql2.Connection;
-                this._connected = true;
-                this._option.sql_type = AZSql.SQL_TYPE.MYSQL;
+                // console.log(`constructor - name`, connection_or_option.constructor.name);
+                //
+                this._instance_name = connection_or_option.constructor.name as 'PoolPromise'|'Cluster'|'PromisePool'|'PromisePoolCluster'|null;
+                //
+                switch (this.instanceName) {
+                    case 'PoolPromise':
+                    case 'Cluster':
+                        // mariadb
+                        this._sql_pool_mariadb = connection_or_option as mariadb.Pool|mariadb.PoolCluster;
+                        this._connected = true;
+                        this._option.sql_type = AZSql.SQL_TYPE.MARIADB;
+                        break;
+                    case 'PromisePool':
+                    case 'PromisePoolCluster':
+                        // mysql
+                        // this._sql_connection = connection_or_option as mysql2.Connection;
+                        this._sql_pool = connection_or_option as mysql2plain.Pool|mysql2plain.PoolCluster;
+                        this._connected = true;
+                        this._option.sql_type = AZSql.SQL_TYPE.MYSQL;
+                        break;
+                }
             }
         }
     }
 
     clear(): AZSql {
+        this.setDebug(false);
         this.setModify(false);
         this.setStoredProcedure(false);
         this.setPrepared(false);
@@ -90,6 +120,15 @@ export class AZSql {
 
     isModify(): boolean {
         return this._is_modify;
+    }
+
+    setDebug(debug: boolean): AZSql {
+        this._is_debug = debug;
+        return this;
+    }
+
+    isDebug(): boolean {
+        return this._is_debug;
     }
 
     setPrepared(prepared: boolean): AZSql {
@@ -138,7 +177,63 @@ export class AZSql {
             ) && 
             !this.isPrepared()
         ) {
-            return [this._query, []];
+            if (this._parameters === null) return [this._query, []];
+            const keys: Array<string> = this._parameters?.getKeys();
+            if (!keys || keys.length < 1) return [this._query, []];
+            //
+            let query: string = this._query as string;
+            //
+            const serialized_keys: string = keys.join('|');
+            const regex: RegExp = new RegExp(`([^@])(${serialized_keys})([\r\n\\s\\t,)]|$)`);
+            while (query.search(regex) > -1) {
+                const match_array: RegExpMatchArray = query.match(regex) as RegExpMatchArray;
+                const key: string|null = match_array && match_array.length > 2 ? match_array[2] : null;
+                if (key == null) continue;
+                const val: any = this._parameters?.get(key);
+                if (typeof val !== 'undefined' && Array.isArray(val)) {
+                    // let q_str: string = '';
+                    val.forEach((col, idx, arr) => {
+                        switch (typeof col) {
+                            case 'number':
+                            case 'boolean':
+                                break;
+                            default:
+                                if ((col ?? null) === null) {
+                                    arr[idx] = null;
+                                }
+                                else {
+                                    arr[idx] = `'${col}'`;
+                                }
+                                break;
+                        }
+                    });
+                    const q_str = val.join(',');
+                    // q_str.length > 1 && (q_str = q_str.substring(1));
+                    query = query.replace(regex, `$1${q_str}$3`);
+                    // for (let cnti: number = 0; cnti < (val as Array<any>).length; cnti++) {
+                    //     param.push((val as Array<any>)[cnti]);
+                    // }
+                }
+                else {
+                    let val: any = this._parameters?.get(key);
+                    switch (typeof val) {
+                        case 'number':
+                        case 'boolean':
+                            break;
+                        default:
+                            if ((val ?? null) === null) {
+                                val = null;
+                            }
+                            else {
+                                val = `'${val}'`;
+                            }
+                            break;
+                    }
+                    query = query.replace(regex, `$1${val}$3`);
+                    // param.push(this._parameters?.get(key));
+                }
+            }
+            return [query, []];
         }
         if (this._parameters === null) return [this._query, []];
         let query: string = this._query as string;
@@ -411,6 +506,14 @@ export class AZSql {
 
     async openAsync(): Promise<boolean> {
         switch (this._option?.sql_type) {
+            case AZSql.SQL_TYPE.MARIADB:
+                this._sql_connection = await new (mariadb.createConnection as any)({
+                    host: this.option?.server,
+                    user: this.option?.id,
+                    password: this.option?.pw,
+                    database: this.option?.catalog,
+                });
+                break;
             case AZSql.SQL_TYPE.MYSQL:
                 this._sql_connection = await new (mysql2.createConnection as any)({
                     host: this.option?.server,
@@ -433,13 +536,20 @@ export class AZSql {
     }
 
     async closeAsync(): Promise<void> {
+        if (this.isDebug() === true) console.log(`AZSql.closeAsync - inTransaction`);
         if (this.inTransaction || !this._open_self) return;
         switch (this._option?.sql_type) {
+            case AZSql.SQL_TYPE.MARIADB:
+                if (this.isDebug() === true) console.log(`AZSql.closeAsync - _sql_connection.release`);
+                await (this._sql_connection as mariadb.PoolConnection).release();
+                break;
             case AZSql.SQL_TYPE.MYSQL:
-                await (this._sql_connection as mysql2.PoolConnection).release();
+                if (this.isDebug() === true) console.log(`AZSql.closeAsync - _sql_connection.release`);
+                (this._sql_connection as mysql2.PoolConnection).release();
                 break;
             case AZSql.SQL_TYPE.SQLITE:
                 await new Promise((resolve: any, reject: any) => {
+                    if (this.isDebug() === true) console.log(`AZSql.closeAsync - _sql_connection.close`);
                     (this._sql_connection as sqlite3.Database).close((_res: any) => {
                         if (_res === null) resolve();
                         reject(_res);
@@ -448,44 +558,76 @@ export class AZSql {
                 break;
         }
         this._sql_connection = null;
-        this._connected = false;
+        // this._connected = false;
         this._open_self = false;
     }
 
     async beginTran(_on_commit?: Function, _on_rollback?: Function): Promise<void> {
+        if (this.isDebug() === true) console.log(`AZSql.beginTran`, this.option?.sql_type);
         if (this._in_transaction) throw new Error('Transaction in use');
-        if (this._transaction !== null) throw new Error('Transaction exists');
+        // if (this._transaction !== null) throw new Error('Transaction exists');
         !this._connected && await this.openAsync();
         switch (this.option?.sql_type) {
-            case AZSql.SQL_TYPE.MYSQL:
-                if (typeof (this._sql_connection as any)['commit'] === 'undefined') {
-                    if (typeof (this._sql_connection as any)['_cluster'] === 'undefined') {
-                    // if (typeof (this._sql_connection as any)['of'] === 'undefined') {
-                        this._sql_pool = this._sql_connection as mysql2.Pool;
-                        this._sql_connection = await this._sql_pool.getConnection();
-                        this._open_self = true;
-                    }
-                    else {
-                        this._sql_pool = this._sql_connection as mysql2plain.PoolCluster;
-                        this._sql_connection = await new Promise((resolve) => {
-                            this._sql_pool?.getConnection((err, conn) => {
-                                if (err) throw err;
-                                this._open_self = true;
-                                resolve(conn);
-                            });
-                        });
-                    }
-                }
-                this._transaction = (this._sql_connection as mysql2.Connection).beginTransaction();
-                this._transaction
+            case AZSql.SQL_TYPE.MARIADB:
+                //
+                this._sql_connection = await this._sql_pool_mariadb!.getConnection();
+                this._open_self = true;
+                if (this.isDebug() === true) console.log(`AZSql.beginTran - getConnection`);
+                //
+                await (this._sql_connection as mariadb.PoolConnection).beginTransaction()
                     .catch((err: Error) => {
-                        this._transaction = null;
+                        this._in_transaction = false;
                     })
                     .then(() => {
                         this._in_transaction = true;
                         typeof _on_commit !== 'undefined' && (this._transaction_on_commit = _on_commit);
                         typeof _on_rollback !== 'undefined' && (this._transaction_on_rollback = _on_rollback);
                     });
+                if (this.isDebug() === true) console.log(`AZSql.beginTran - inTransaction`, this.inTransaction);
+                //
+                break;
+            case AZSql.SQL_TYPE.MYSQL:
+                if (typeof (this._sql_pool as any)['commit'] === 'undefined') {
+                    // if (typeof (this._sql_pool as any)['_cluster'] === 'undefined') {
+                    if (this.instanceName === 'PromisePool') {
+                    // if (typeof (this._sql_connection as any)['of'] === 'undefined') {
+                        this._sql_pool = this._sql_pool as mysql2.Pool;
+                        this._sql_connection = await this._sql_pool.getConnection();
+                        this._open_self = true;
+                        if (this.isDebug() === true) console.log(`AZSql.beginTran - getConnection`);
+                    }
+                    else {
+                        this._sql_pool = this._sql_pool as mysql2plain.PoolCluster;
+                        this._sql_connection = await new Promise((resolve) => {
+                            (this._sql_pool as mysql2plain.PoolCluster)?.getConnection((err, conn) => {
+                                if (err) throw err;
+                                this._open_self = true;
+                                resolve(conn);
+                            });
+                        });
+                        if (this.isDebug() === true) console.log(`AZSql.beginTran - getConnection`);
+                    }
+                }
+                // this._transaction = (this._sql_connection as mysql2.Connection).beginTransaction();
+                // this._transaction
+                //     .catch((err: Error) => {
+                //         this._transaction = null;
+                //     })
+                //     .then(() => {
+                //         this._in_transaction = true;
+                //         typeof _on_commit !== 'undefined' && (this._transaction_on_commit = _on_commit);
+                //         typeof _on_rollback !== 'undefined' && (this._transaction_on_rollback = _on_rollback);
+                //     });
+                await (this._sql_connection as mysql2.Connection).beginTransaction()
+                    .catch((err: Error) => {
+                        this._in_transaction = false;
+                    })
+                    .then(() => {
+                        this._in_transaction = true;
+                        typeof _on_commit !== 'undefined' && (this._transaction_on_commit = _on_commit);
+                        typeof _on_rollback !== 'undefined' && (this._transaction_on_rollback = _on_rollback);
+                    });
+                if (this.isDebug() === true) console.log(`AZSql.beginTran - inTransaction`, this.inTransaction);
                 break;
         }
     }
@@ -498,6 +640,9 @@ export class AZSql {
         try {
             if (this._in_transaction) {
                 switch (this.option?.sql_type) {
+                    case AZSql.SQL_TYPE.MARIADB:
+                        await (this._sql_connection as mariadb.PoolConnection).commit();
+                        break;
                     case AZSql.SQL_TYPE.MYSQL:
                         await (this._sql_connection as mysql2.Connection).commit();
                         break;
@@ -523,8 +668,20 @@ export class AZSql {
         try {
             if (!this._in_transaction) throw new Error('Transaction not exists');
             switch (this.option?.sql_type) {
+                case AZSql.SQL_TYPE.MARIADB:
+                    if (this.isDebug() === true) console.log(`AZSql.rollback`);
+                    await (this._sql_connection as mariadb.PoolConnection).rollback()
+                        .catch(reason => {
+                            if (this.isDebug() === true) console.log(`AZSql.rollback - rollback.catch`, reason);
+                        });
+                    break;
+                    break;
                 case AZSql.SQL_TYPE.MYSQL:
-                    await (this._sql_connection as mysql2.Connection).rollback();
+                    if (this.isDebug() === true) console.log(`AZSql.rollback`);
+                    await (this._sql_connection as mysql2.Connection).rollback()
+                        .catch(reason => {
+                            if (this.isDebug() === true) console.log(`AZSql.rollback - rollback.catch`, reason);
+                        });
                     break;
             }
             this._transaction_on_rollback && this._transaction_on_rollback();
@@ -539,11 +696,11 @@ export class AZSql {
     }
 
     removeTran(): AZSql {
-        if (this._sql_pool !== null) {
-            this._sql_connection = this._sql_pool;
-            this._sql_pool = null;
-        }
-        this._transaction = null;
+        // if (this._sql_pool !== null) {
+        //     this._sql_connection = this._sql_pool;
+        //     this._sql_pool = null;
+        // }
+        // this._transaction = null;
         this._in_transaction = false;
         this._transaction_result = null;
         this._transaction_on_commit = null;
@@ -557,6 +714,7 @@ export class AZSql {
         return_param_or_id?: AZData|object|boolean,
         is_sp?: boolean
     ): Promise<any> {
+        if (this.isDebug() === true) console.log(`AZSql.getAsync - query_or_id`, query_or_id, 'param_or_id', param_or_id, 'return_param_or_id', return_param_or_id, 'is_sp', is_sp);
         // const res: object = await this.getDataAsync(query_or_id, param_or_id, return_param_or_id, is_sp);
         // let rtn_val: any = null;
         // const keys: Array<string> = Object.keys(res);
@@ -582,6 +740,7 @@ export class AZSql {
         return_param_or_id?: AZData|object|boolean,
         is_sp?: boolean
     ): Promise<object|null> {
+        if (this.isDebug() === true) console.log(`AZSql.getDataAsync - query_or_id`, query_or_id, 'param_or_id', param_or_id, 'return_param_or_id', return_param_or_id, 'is_sp', is_sp);
         // const res: Array<any> = await this.getListAsync(query_or_id, param_or_id, return_param_or_id, is_sp);
         // let rtn_val: object = {};
         // res.length > 0 && (rtn_val = res[0]);
@@ -604,6 +763,7 @@ export class AZSql {
         return_param_or_id?: AZData|object|boolean,
         is_sp?: boolean
     ): Promise<Array<any>> {
+        if (this.isDebug() === true) console.log(`AZSql.getListAsync - query_or_id`, query_or_id, 'param_or_id', param_or_id, 'return_param_or_id', return_param_or_id, 'is_sp', is_sp);
         // const res: AZSql.Result = await this.executeAsync(query_or_id, param_or_id, return_param_or_id, is_sp);
         // if (typeof res.rows === 'undefined' && typeof res.err !== 'undefined') throw res.err;
         // let rtn_val: Array<any> = new Array<any>();
@@ -652,51 +812,299 @@ export class AZSql {
         // let rtn_val: AZSql.Result = {} as AZSql.Result;
         let rtn_val: number = 0;
 
+        if (this.isDebug() === true) console.log(`AZSql.executeAsync - connected`, this.connected);
         if (!this.connected) await this.openAsync();
 
         // const is_prepared: boolean = this.isPrepared || this.getParamters() !== null && ((this.getParamters() as AZData).size() > 0);
         const is_prepared: boolean = this.isPrepared();
+        if (this.isDebug() === true) console.log(`AZSql.executeAsync - is_prepared`, is_prepared);
 
         if (this.inTransaction && !this.connected) return Promise.reject(new Error('Not connected'));
         if (this.connected) {
             try {
                 let [query, params] = this.getQueryAndParams();
+                // if (this.isDebug() === true) console.log(`AZSql.executeAsync - getQueryAndParams`, query, params);
                 switch (this.option?.sql_type) {
+                    case AZSql.SQL_TYPE.MARIADB:
+                        if (is_prepared) {
+                            let res: any = null;
+                            let err: Error|null = null;
+                            //
+                            // const is_cluster = (this._sql_pool_mariadb as any).constructor.name === 'Cluster';
+                            const is_cluster = this.instanceName === 'Cluster';
+                            if (this.isDebug() === true) console.log(`AZSql.executeAsync - is_cluster`, is_cluster);
+                            if (this.isDebug() === true) console.log(`AZSql.executeAsync - inTransaction`, this.inTransaction);
+                            //
+                            if (!this.inTransaction || this._sql_connection === null) {
+                                this._sql_pool_mariadb = this._sql_pool_mariadb as mariadb.Pool;
+                                this._sql_connection = await this._sql_pool_mariadb.getConnection()
+                                this._open_self = true;
+                                if (this.isDebug() === true) console.log(`AZSql.executeAsync - getConnection`);
+                            }
+
+                            //
+                            if (this.isDebug() === true) console.log(`AZSql.executeAsync - execute`, query, params);
+                            [res, err] = await (this._sql_connection as mariadb.PoolConnection).execute(query as string, params)
+                                .then((result: any) => {
+                                    if (this.isDebug() === true) console.log(`AZSql.executeAsync - execute.then`, result);
+                                    return [ result, null ];
+                                })
+                                .catch(async (err: Error) => {
+                                    if (this.isDebug() === true) console.log(`AZSql.executeAsync - execute.catch`, err);
+                                    this.inTransaction && await this.rollback();
+                                    return [ null, err ];
+                                });
+                            //
+                            if (err) {
+                                // rtn_val.err = err;
+                                throw err;
+                            }
+                            else {
+                                if (Array.isArray(res)) {
+                                    this.setResults(res);
+                                }
+                                else {
+                                    // { affectedRows: 1, insertId: 53n, warningStatus: 0 }
+                                    const header = res as { affectedRows: number, insertId: number, warningStatus: number };
+                                    // rtn_val.affected = header.affectedRows;
+                                    // rtn_val.identity = header.insertId;
+                                    // rtn_val.header = header;
+                                    rtn_val = this.isIdentity() ? Number(header.insertId) : header.affectedRows;
+                                    //
+                                    this.inTransaction && this.addTransactionResult(rtn_val);
+                                }
+                                //
+                                if (this.isDebug() === true) console.log(`AZSql.executeAsync - isStoredProcedure`, this.isStoredProcedure());
+                                if (this.isStoredProcedure()) {
+                                    const return_query: string|null = this.getReturnQuery();
+                                    if (this.isDebug() === true) console.log(`AZSql.executeAsync - return_query`, return_query);
+                                    if (return_query !== null) {
+                                        let r_res: any = null;
+                                        let r_err: Error|null = null;
+                                        // if (!is_cluster) {
+                                        //     [r_res, r_err] = await (this._sql_connection as mariadb.Connection).query(return_query as string)
+                                        //         .then((result: any) => {
+                                        //             return [ result, null ];
+                                        //         })
+                                        //         .catch(async (err: Error) => {
+                                        //             this.inTransaction && await this.rollback();
+                                        //             return [ null, err ];
+                                        //         });
+                                        // }
+                                        // else {
+                                        //     [r_res, r_err] = await new Promise((resolve) => {
+                                        //         (this._sql_connection as mysql2plain.PoolConnection).query(return_query as string, async (err, result) => {
+                                        //             // console.log(`az.cluster.result`, result);\
+                                        //             if (err) {
+                                        //                 this.inTransaction && await this.rollback();
+                                        //                 resolve([null, err]);
+                                        //             }
+                                        //             resolve([[result, []], null]);
+                                        //         });
+                                        //     });
+                                        // }
+
+                                        [r_res, r_err] = await (this._sql_connection as mariadb.PoolConnection).query(return_query as string)
+                                            .then((result: any) => {
+                                            if (this.isDebug() === true) console.log(`AZSql.executeAsync - query.then`, result);
+                                                return [ result, null ];
+                                            })
+                                            .catch(async (err: Error) => {
+                                                this.inTransaction && await this.rollback();
+                                                return [ null, err ];
+                                            });
+                                        if (r_err) {
+                                            // rtn_val.err = err;
+                                            throw r_err;
+                                        }
+                                        else {
+                                            if (Array.isArray(r_res)) {
+                                                /**
+                                                 * [
+                                                 *  rows,
+                                                 *  ColumnDefinitaion,
+                                                 * ]
+                                                 */
+                                                const return_params: any = (r_res as Array<any>)[0];
+                                                const return_keys: Array<string> = Object.keys(return_params);
+                                                for (let cnti: number = 0; cnti < return_keys.length; cnti++) {
+                                                    const return_key: string = return_keys[cnti];
+                                                    let return_val: any = return_params[return_key] as any;
+                                                    if (this.isDebug() === true) console.log(`AZSql.executeAsync - return_key: return_val`, {return_key, return_val});
+                                                    if (typeof return_val === 'bigint') return_val = Number(return_val);
+                                                    this.updateReturnParamter(return_key, return_val);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        else {
+                            let res: any = null;
+                            let err: Error|null = null;
+                            //
+                            // const is_cluster = typeof (this._sql_pool as any)['_cluster'] !== 'undefined';
+                            const is_cluster = this.instanceName === 'PoolPromise';
+                            if (this.isDebug() === true) console.log(`AZSql.executeAsync - is_cluster`, is_cluster);
+                            if (this.isDebug() === true) console.log(`AZSql.executeAsync - inTransaction`, this.inTransaction);
+                            //
+                            if (!this.inTransaction || this._sql_connection === null) {
+                                this._sql_pool_mariadb = this._sql_pool_mariadb as mariadb.PoolCluster;
+                                this._sql_connection = await this._sql_pool_mariadb.getConnection();
+                                this._open_self = true;
+                                if (this.isDebug() === true) console.log(`AZSql.executeAsync - getConnection`);
+                            }
+                            //
+                            if (this.isDebug() === true) console.log(`AZSql.executeAsync - execute`, query, params);
+                            [res, err] = await (this._sql_connection as mariadb.PoolConnection).query(query as string, params)
+                                .then((result: any) => {
+                                    if (this.isDebug() === true) console.log(`AZSql.executeAsync - execute.then`, result);
+                                    return [ result, null ];
+                                })
+                                .catch(async (err: Error) => {
+                                    if (this.isDebug() === true) console.log(`AZSql.executeAsync - execute.catch`, err);
+                                    this.inTransaction && await this.rollback();
+                                    return [ null, err ];
+                                });
+                            //
+                            if (err) {
+                                // rtn_val.err = err;
+                                throw err;
+                            }
+                            else {
+                                if (Array.isArray(res)) {
+                                    this.setResults(res);
+                                }
+                                else {
+                                    // { affectedRows: 1, insertId: 53n, warningStatus: 0 }
+                                    const header = res as { affectedRows: number, insertId: number, warningStatus: number };
+                                    // rtn_val.affected = header.affectedRows;
+                                    // rtn_val.identity = header.insertId;
+                                    // rtn_val.header = header;
+                                    rtn_val = this.isIdentity() ? Number(header.insertId) : header.affectedRows;
+                                    //
+                                    this.inTransaction && this.addTransactionResult(rtn_val);
+                                }
+                                //
+                                if (this.isDebug() === true) console.log(`AZSql.executeAsync - isStoredProcedure`, this.isStoredProcedure());
+                                if (this.isStoredProcedure()) {
+                                    const return_query: string|null = this.getReturnQuery();
+                                    if (this.isDebug() === true) console.log(`AZSql.executeAsync - return_query`, return_query);
+                                    if (return_query !== null) {
+                                        let r_res: any = null;
+                                        let r_err: Error|null = null;
+                                        // if (!is_cluster) {
+                                        //     [r_res, r_err] = await (this._sql_connection as mariadb.Connection).query(return_query as string)
+                                        //         .then((result: any) => {
+                                        //             return [ result, null ];
+                                        //         })
+                                        //         .catch(async (err: Error) => {
+                                        //             this.inTransaction && await this.rollback();
+                                        //             return [ null, err ];
+                                        //         });
+                                        // }
+                                        // else {
+                                        //     [r_res, r_err] = await new Promise((resolve) => {
+                                        //         (this._sql_connection as mysql2plain.PoolConnection).query(return_query as string, async (err, result) => {
+                                        //             // console.log(`az.cluster.result`, result);\
+                                        //             if (err) {
+                                        //                 this.inTransaction && await this.rollback();
+                                        //                 resolve([null, err]);
+                                        //             }
+                                        //             resolve([[result, []], null]);
+                                        //         });
+                                        //     });
+                                        // }
+
+                                        [r_res, r_err] = await (this._sql_connection as mariadb.PoolConnection).query(return_query as string)
+                                            .then((result: any) => {
+                                            if (this.isDebug() === true) console.log(`AZSql.executeAsync - query.then`, result);
+                                                return [ result, null ];
+                                            })
+                                            .catch(async (err: Error) => {
+                                                this.inTransaction && await this.rollback();
+                                                return [ null, err ];
+                                            });
+                                        if (r_err) {
+                                            // rtn_val.err = err;
+                                            throw r_err;
+                                        }
+                                        else {
+                                            if (Array.isArray(r_res)) {
+                                                /**
+                                                 * [
+                                                 *  rows,
+                                                 *  ColumnDefinitaion,
+                                                 * ]
+                                                 */
+                                                const return_params: any = (r_res as Array<any>)[0];
+                                                const return_keys: Array<string> = Object.keys(return_params);
+                                                for (let cnti: number = 0; cnti < return_keys.length; cnti++) {
+                                                    const return_key: string = return_keys[cnti];
+                                                    let return_val: any = return_params[return_key] as any;
+                                                    if (this.isDebug() === true) console.log(`AZSql.executeAsync - return_key: return_val`, {return_key, return_val});
+                                                    if (typeof return_val === 'bigint') return_val = Number(return_val);
+                                                    this.updateReturnParamter(return_key, return_val);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        break;
                     case AZSql.SQL_TYPE.MYSQL:
+                        // if (this.isDebug() === true) console.log(`AZSql.executeAsync - MYSQL`);
                         if (is_prepared) {
                             // let rows: Array<any>|any|null = null;
                             let res: any = null;
                             let err: Error|null = null;
                             //
-                            const is_cluster = typeof (this._sql_connection as any)['_cluster'] !== 'undefined';
+                            // const is_cluster = typeof (this._sql_pool as any)['_cluster'] !== 'undefined';
+                            const is_cluster = this.instanceName === 'PromisePoolCluster';
+                            if (this.isDebug() === true) console.log(`AZSql.executeAsync - is_cluster`, is_cluster);
+                            if (this.isDebug() === true) console.log(`AZSql.executeAsync - inTransaction`, this.inTransaction);
                             //
                             if (!is_cluster) {
-                                this._sql_pool = this._sql_connection as mysql2.Pool;
-                                this._sql_connection = await this._sql_pool.getConnection();
-                                this._open_self = true;
+                                if (!this.inTransaction || this._sql_connection === null) {
+                                    this._sql_pool = this._sql_pool as mysql2.Pool;
+                                    this._sql_connection = await this._sql_pool.getConnection();
+                                    this._open_self = true;
+                                    if (this.isDebug() === true) console.log(`AZSql.executeAsync - getConnection`);
+                                }
+
                                 //
+                                if (this.isDebug() === true) console.log(`AZSql.executeAsync - execute`, query, params);
                                 [res, err] = await (this._sql_connection as mysql2.Connection).execute(query as string, params)
                                     .then((result: any) => {
+                                        if (this.isDebug() === true) console.log(`AZSql.executeAsync - execute.then`, result);
                                         return [ result, null ];
                                     })
                                     .catch(async (err: Error) => {
+                                        if (this.isDebug() === true) console.log(`AZSql.executeAsync - execute.catch`, err);
                                         this.inTransaction && await this.rollback();
                                         return [ null, err ];
                                     });
                             }
                             else {
                                 // this._sql_pool = this._sql_connection as mysql2plain.PoolCluster;
-                                this._sql_pool = this._sql_connection as mysql2.PoolCluster;
-                                this._sql_connection = await new Promise((resolve) => {
-                                    this._sql_pool?.getConnection((err, conn) => {
-                                        if (err) throw err;
-                                        this._open_self = true;
-                                        resolve(conn);
+                                if (!this.inTransaction || this._sql_connection === null) {
+                                    this._sql_pool = this._sql_pool as mysql2.PoolCluster;
+                                    this._sql_connection = await new Promise((resolve) => {
+                                        this._sql_pool?.getConnection((err, conn) => {
+                                            if (err) throw err;
+                                            this._open_self = true;
+                                            resolve(conn);
+                                        });
                                     });
-                                });
+                                    if (this.isDebug() === true) console.log(`AZSql.executeAsync - getConnection`);
+                                }
                                 //
                                 [res, err] = await new Promise((resolve) => {
+                                    if (this.isDebug() === true) console.log(`AZSql.executeAsync - execute`, query, params);
                                     (this._sql_connection as mysql2plain.PoolConnection).execute(query as string, params, async (err, result) => {
+                                        if (this.isDebug() === true) console.log(`AZSql.executeAsync - execute.callback`, err, result);
                                         if (err) {
                                             this.inTransaction && await this.rollback();
                                             resolve([null, err]);
@@ -827,12 +1235,18 @@ export class AZSql {
                             let res: any = null;
                             let err: Error|null = null;
                             //
-                            const is_cluster = typeof (this._sql_connection as any)['_cluster'] !== 'undefined';
+                            // const is_cluster = typeof (this._sql_pool as any)['_cluster'] !== 'undefined';
+                            const is_cluster = this.instanceName === 'PromisePoolCluster';
+                            if (this.isDebug() === true) console.log(`AZSql.executeAsync - is_cluster`, is_cluster);
+                            if (this.isDebug() === true) console.log(`AZSql.executeAsync - inTransaction`, this.inTransaction);
                             //
                             if (!is_cluster) {
-                                this._sql_pool = this._sql_connection as mysql2.Pool;
-                                this._sql_connection = await this._sql_pool.getConnection();
-                                this._open_self = true;
+                                if (!this.inTransaction || this._sql_connection === null) {
+                                    this._sql_pool = this._sql_pool as mysql2.Pool;
+                                    this._sql_connection = await this._sql_pool.getConnection();
+                                    this._open_self = true;
+                                    if (this.isDebug() === true) console.log(`AZSql.executeAsync - getConnection`);
+                                }
                                 //
                                 [res, err] = await (this._sql_connection as mysql2.Connection).query(query as string, params)
                                     .then((result: any) => {
@@ -844,14 +1258,17 @@ export class AZSql {
                                     });
                             }
                             else {
-                                this._sql_pool = this._sql_connection as mysql2plain.PoolCluster;
-                                this._sql_connection = await new Promise((resolve) => {
-                                    this._sql_pool?.getConnection((err, conn) => {
-                                        if (err) throw err;
-                                        this._open_self = true;
-                                        resolve(conn);
+                                if (!this.inTransaction || this._sql_connection === null) {
+                                    this._sql_pool = this._sql_pool as mysql2plain.PoolCluster;
+                                    this._sql_connection = await new Promise((resolve) => {
+                                        this._sql_pool?.getConnection((err, conn) => {
+                                            if (err) throw err;
+                                            this._open_self = true;
+                                            resolve(conn);
+                                        });
                                     });
-                                });
+                                    if (this.isDebug() === true) console.log(`AZSql.executeAsync - getConnection`);
+                                }
                                 //
                                 [res, err] = await new Promise((resolve) => {
                                     (this._sql_connection as mysql2plain.PoolConnection).query(query as string, params, async (err, result) => {
@@ -1058,6 +1475,7 @@ export class AZSql {
                 throw e;
             }
             finally {
+                if (this.isDebug() === true) console.log(`AZSql.executeAsync - finally`);
                 this.setModify(false);
                 await this.closeAsync()
                     .catch((e) => {
@@ -1112,6 +1530,10 @@ export class AZSql {
 
     get option(): AZSql.Option|null {
         return this._option;
+    }
+
+    get instanceName(): 'PoolPromise'|'Cluster'|'PromisePool'|'PromisePoolCluster'|null {
+        return this._instance_name;
     }
 }
 
