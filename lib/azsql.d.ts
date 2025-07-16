@@ -10,7 +10,7 @@ export declare class AZSql {
     protected _option: AZSql.Option;
     protected _connected: boolean;
     protected _open_self: boolean;
-    protected _instance_name: 'PoolPromise' | 'Cluster' | 'PromisePool' | 'PromisePoolCluster' | null;
+    protected _instance_name: 'PoolPromise' | 'Cluster' | 'PromisePool' | 'PromisePoolCluster' | 'PoolNamespace' | null;
     protected _query: string | null;
     protected _parameters: AZData | null;
     protected _return_parameters: AZData | object | null;
@@ -89,7 +89,7 @@ export declare class AZSql {
     get connected(): boolean;
     get inTransaction(): boolean;
     get option(): AZSql.Option | null;
-    get instanceName(): 'PoolPromise' | 'Cluster' | 'PromisePool' | 'PromisePoolCluster' | null;
+    get instanceName(): 'PoolPromise' | 'Cluster' | 'PromisePool' | 'PromisePoolCluster' | 'PoolNamespace' | null;
 }
 export declare namespace AZSql {
     interface Option {

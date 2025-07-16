@@ -46,24 +46,48 @@ const test_sqlite: Function = async () => {
 
 const test_mysql: Function = async () => {
 
+    const cluster_pool = mysql.createPoolCluster({
+        defaultSelector: 'RR',
+    });
+    cluster_pool.add({
+        host: 'utility-mysql-origin.mysql.database.azure.com',
+        port: 3306,
+        user: 'cencloud_book_user',
+        password: 'pfRlxl#rPfksQhkd@mysql',
+        database: 'book',
+    });
+
+    const token = 'WS152849zh5LkhLrv0N5vIbBiGxiEYqf9a8rR1nV';
+
+    let cluster_res = await new AZSql(cluster_pool, true)
+        .setPrepared(true)
+        .getAsync(
+            `SELECT EXISTS(SELECT * FROM site_info WHERE siteservice_key=@site_key AND site_token=@token AND delete_yn='N') AS cnt`,
+            { '@token': token, '@site_key': 1, }
+        );
+    console.log(`cluster_res`, cluster_res);
+
+    return;
+
     const pool = mysql.createPool({
-        host: 'localhost',
-        user: 'scm',
-        password: 'Dada!Scm88',
-        database: 'scm',
+        host: '1.11.70.24',
+        port: 30637,
+        user: 'kpoplive_user',
+        password: '!zpfktkdydwk@',
+        database: 'kpoplive',
         waitForConnections: true,
         connectionLimit: 10,
         queueLimit: 0,
         multipleStatements: true,
     });
 
-    const con = await mysql.createConnection({
-        host: 'localhost',
-        user: 'scm',
-        password: 'Dada!Scm88',
-        database: 'scm',
-        multipleStatements: true,
-    });
+    // const con = await mysql.createConnection({
+    //     host: 'localhost',
+    //     user: 'scm',
+    //     password: 'Dada!Scm88',
+    //     database: 'scm',
+    //     multipleStatements: true,
+    // });
 
     console.log(`stage.1`);
     // let sql: AZSql.Prepared = new AZSql.Prepared({
@@ -96,55 +120,59 @@ const test_mysql: Function = async () => {
         () => {
             console.log(`beginTran.on_rollback`);
         });
-    mres = await sql.clear().setPrepared(true).setIdentity(true).executeAsync('INSERT INTO corp_fee (keyCorp, fee) VALUES (@keyCorp, @fee)', new AZData().add('@keyCorp', 1).add('@fee', .03));
-    console.log('mres----------------------------------');
+    mres = await sql.clear().setPrepared(true).setIdentity(true).executeAsync('INSERT INTO _test (pi_name, pi_price, pi_read_cnt) VALUES (@pi_name, @pi_price, @pi_read_cnt)', new AZData().add('@pi_name', '김삿갓1').add('@pi_price', 100).add('@pi_read_cnt', 0));
+    console.log('1.mres----------------------------------');
     console.log(mres);
     let id: any;
     id = mres as number;
 
-    mres = await sql.clear().setPrepared(false).executeAsync('SELECT * FROM corp_fee WHERE keyFee IN (@keyFees)', new AZData().add('@keyFees', [1, 4]));
-    console.log('mres----------------------------------');
+    mres = await sql.clear().setPrepared(false).getListAsync('SELECT * FROM _test WHERE pi_name IN (@pi_name)', new AZData().add('@pi_name', ['홍길동1', '김삿갓1']));
+    console.log('2.mres----------------------------------');
     console.log(mres);
 
-    mres = await sql.clear().setPrepared(false).executeAsync('SELECT * FROM corp_fee WHERE keyFee IN (@keyFees)', { '@keyFees': [1, 4] });
-    console.log('mres----------------------------------');
+    mres = await sql.clear().setPrepared(false).getListAsync('SELECT * FROM _test WHERE pi_price IN (@pi_price)', { '@pi_price': [100, 200] });
+    console.log('3.mres----------------------------------');
     console.log(mres);
-    console.log('results----------------------------------');
+    console.log('3.results----------------------------------');
     console.log(sql.getResults());
 
-    mres = await sql.clear().setPrepared(true).executeAsync('UPDATE corp_fee SET fee=@fee WHERE keyFee=@keyFee', new AZData().add('@keyFee', id).add('@fee', .04));
-    console.log('mres----------------------------------');
+    mres = await sql.clear().setPrepared(true).executeAsync('UPDATE _test SET pi_read_cnt=@pi_read_cnt WHERE pi_id=@pi_id', new AZData().add('@pi_id', id).add('@pi_read_cnt', 100));
+    console.log('4.mres----------------------------------');
     console.log(mres);
-    mres = await sql.clear().setPrepared(true).executeAsync('DELETE FROM corp_fee WHERE keyFee=@keyFee', new AZData().add('@keyFee', id).add('@fee', .04));
-    console.log('mres----------------------------------');
+    mres = await sql.clear().setPrepared(true).executeAsync('DELETE FROM _test WHERE pi_id=@pi_id', new AZData().add('@pi_id', id));
+    console.log('5.mres----------------------------------');
     console.log(mres);
     await sql.commit();
     console.log(`sql.commit`);
 
-    mres = await sql.clear().setPrepared(true).getListAsync('SELECT * FROM corp_fee WHERE keyFee IN (@keyFees)', new AZData().add('@keyFees', [1, 3, 4]));
-    console.log('mres----------------------------------');
+    mres = await sql.clear().setPrepared(true).getListAsync('SELECT * FROM _test WHERE pi_name IN (@pi_name)', new AZData().add('@pi_name', ['홍길동1', '김삿갓1']));
+    console.log('6.mres----------------------------------');
     console.log(mres);
 
-    mres = await sql.clear().setPrepared(true).getDataAsync('SELECT * FROM corp_fee WHERE keyFee IN (@keyFees) ORDER BY keyFee DESC', new AZData().add('@keyFees', [1, 2, 4]));
-    console.log('mres----------------------------------');
+    mres = await sql.clear().setPrepared(true).getDataAsync('SELECT * FROM _test WHERE pi_price IN (@pi_price) ORDER BY pi_name DESC', new AZData().add('@pi_price', [100, 200]));
+    console.log('7.mres----------------------------------');
     console.log(mres);
 
-    mres = await sql.clear().setPrepared(true).getAsync('SELECT * FROM corp_fee WHERE keyFee IN (@keyFees) ORDER BY keyFee DESC', new AZData().add('@keyFees', [1, 2, 4]))
+    mres = await sql.clear().setPrepared(true).getAsync('SELECT * FROM _test WHERE pi_price IN (@pi_price) ORDER BY pi_name DESC', new AZData().add('@pi_price', [100, 200]))
         .catch(err => {
             console.log('err----------------------------------');
             console.log(err.message);
             return null;
         });
-    console.log('mres----------------------------------');
+    console.log('8.mres----------------------------------');
     console.log(mres);
 
-    mres = await sql.clear().setPrepared(false).setStoredProcedure(true).executeAsync('call corp_board_getList(@o_code, @o_ret, @type, @offset, @limit)', {'@type': 1, '@offet': 0, '@limit': 10}, new AZData().add('@o_code', null).add('@o_ret', null));
-    console.log('mres----------------------------------');
+    mres = await sql.clear().setPrepared(true).getAsync('SELECT EXISTS(SELECT * FROM _test WHERE pi_name=@pi_name) AS cnt', new AZData().add('@pi_name', '홍길동1'));
+    console.log('9.mres----------------------------------');
     console.log(mres);
-    console.log('results----------------------------------');
-    console.log(sql.getResults());
-    console.log('returns----------------------------------');
-    console.log(sql.getReturnParamters()?.toJsonString());
+
+    // mres = await sql.clear().setPrepared(false).setStoredProcedure(true).executeAsync('call corp_board_getList(@o_code, @o_ret, @type, @offset, @limit)', {'@type': 1, '@offet': 0, '@limit': 10}, new AZData().add('@o_code', null).add('@o_ret', null));
+    // console.log('mres----------------------------------');
+    // console.log(mres);
+    // console.log('results----------------------------------');
+    // console.log(sql.getResults());
+    // console.log('returns----------------------------------');
+    // console.log(sql.getReturnParamters()?.toJsonString());
 
 
     console.log(`\n\n****************************************\n\n`);
@@ -284,4 +312,4 @@ const test_mysql: Function = async () => {
 };
 
 test_mysql();
-test_sqlite();
+// test_sqlite();

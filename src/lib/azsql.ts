@@ -18,7 +18,7 @@ export class AZSql {
     protected _open_self: boolean = false;
 
     // PoolPromise, Cluster -> mariadb / PromisePool, PromisePoolCluster -> mysql
-    protected _instance_name: 'PoolPromise'|'Cluster'|'PromisePool'|'PromisePoolCluster'|null = null;
+    protected _instance_name: 'PoolPromise'|'Cluster'|'PromisePool'|'PromisePoolCluster'|'PoolNamespace'|null = null;
     
     protected _query: string|null = null;
     protected _parameters: AZData|null = null;
@@ -62,7 +62,7 @@ export class AZSql {
             else {
                 // console.log(`constructor - name`, connection_or_option.constructor.name);
                 //
-                this._instance_name = connection_or_option.constructor.name as 'PoolPromise'|'Cluster'|'PromisePool'|'PromisePoolCluster'|null;
+                this._instance_name = connection_or_option.constructor.name as 'PoolPromise'|'Cluster'|'PromisePool'|'PromisePoolCluster'|'PoolNamespace'|null;
                 //
                 switch (this.instanceName) {
                     case 'PoolPromise':
@@ -74,6 +74,7 @@ export class AZSql {
                         break;
                     case 'PromisePool':
                     case 'PromisePoolCluster':
+                    case 'PoolNamespace':
                         // mysql
                         // this._sql_connection = connection_or_option as mysql2.Connection;
                         this._sql_pool = connection_or_option as mysql2plain.Pool|mysql2plain.PoolCluster;
@@ -1062,7 +1063,7 @@ export class AZSql {
                             let err: Error|null = null;
                             //
                             // const is_cluster = typeof (this._sql_pool as any)['_cluster'] !== 'undefined';
-                            const is_cluster = this.instanceName === 'PromisePoolCluster';
+                            const is_cluster = [ 'PromisePoolCluster', 'PoolNamespace', ].includes(this.instanceName ?? ''); // this.instanceName === 'PromisePoolCluster';
                             if (this.isDebug() === true) console.log(`AZSql.executeAsync - is_cluster`, is_cluster);
                             if (this.isDebug() === true) console.log(`AZSql.executeAsync - inTransaction`, this.inTransaction);
                             //
@@ -1236,7 +1237,7 @@ export class AZSql {
                             let err: Error|null = null;
                             //
                             // const is_cluster = typeof (this._sql_pool as any)['_cluster'] !== 'undefined';
-                            const is_cluster = this.instanceName === 'PromisePoolCluster';
+                            const is_cluster = [ 'PromisePoolCluster', 'PoolNamespace', ].includes(this.instanceName ?? ''); // this.instanceName === 'PromisePoolCluster';
                             if (this.isDebug() === true) console.log(`AZSql.executeAsync - is_cluster`, is_cluster);
                             if (this.isDebug() === true) console.log(`AZSql.executeAsync - inTransaction`, this.inTransaction);
                             //
@@ -1532,7 +1533,7 @@ export class AZSql {
         return this._option;
     }
 
-    get instanceName(): 'PoolPromise'|'Cluster'|'PromisePool'|'PromisePoolCluster'|null {
+    get instanceName(): 'PoolPromise'|'Cluster'|'PromisePool'|'PromisePoolCluster'|'PoolNamespace'|null {
         return this._instance_name;
     }
 }
